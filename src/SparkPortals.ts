@@ -19,6 +19,7 @@ uniform bool encodeLinear;
 uniform float time;
 uniform bool debugFlag;
 uniform float maxStdDev;
+uniform float gaussianK;
 uniform float minAlpha;
 uniform bool disableFalloff;
 uniform float falloff;
@@ -95,10 +96,14 @@ void main() {
         discard;
     }
 
-    float a = rgba.a;
-    float shifted = sqrt(z2) - max(0.0, a - 1.0);
-    float exponent = -0.5 * max(1.0, a) * sqr(max(0.0, shifted));
-    rgba.a = min(1.0, a) * exp(exponent);
+    float kernel = gaussianKernel(z2, gaussianK);
+    if (rgba.a <= 1.0) {
+        rgba.a = mix(rgba.a, rgba.a * kernel, falloff);
+    } else {
+        float a = exp((rgba.a*rgba.a - 1.0) / 2.718281828459045);
+        float alpha = 1.0 - pow(1.0 - kernel, a);
+        rgba.a = mix(1.0, alpha, falloff);
+    }
 
     if (rgba.a < minAlpha) {
         discard;

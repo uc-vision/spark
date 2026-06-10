@@ -614,6 +614,7 @@
     });
 
     debugFolder.add(spark, "maxStdDev", 0.1, 3.0, 0.01).name("Max Gsplat stddev").listen();
+    debugFolder.add(spark, "gaussianK", 1.0, 4.0, 0.1).name("Gaussian k").listen();
     debugFolder.add(spark, "falloff", 0, 1, 0.01).name("Gaussian falloff").listen();
     debugFolder.add(spark, "preBlurAmount", 0, 2, 0.1).name("Blur amount (no AA)").listen();
     debugFolder.add(spark, "blurAmount", 0, 2, 0.1).name("Blur amount (AA)").listen();

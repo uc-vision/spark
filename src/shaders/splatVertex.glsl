@@ -17,6 +17,7 @@ uniform vec4 renderToViewQuat;
 uniform vec3 renderToViewPos;
 uniform mat3 renderToViewBasis;
 uniform float maxStdDev;
+uniform float gaussianK;
 uniform float minPixelRadius;
 uniform float maxPixelRadius;
 uniform bool enableExtSplats;
@@ -103,7 +104,7 @@ void main() {
         }
     }
 
-    adjustedStdDev = maxStdDev;
+    float adjustedMaxStdDev = maxStdDev;
     if (rgba.a > 1.0) {
         // Stretch 1..2 to 1..5
         rgba.a = min(rgba.a * 4.0 - 3.0, 5.0);
@@ -117,8 +118,9 @@ void main() {
         }
 
         // Expand the maximum std dev to approximately cover the larger range
-        adjustedStdDev = maxStdDev + 0.7 * (rgba.a - 1.0);
+        adjustedMaxStdDev = maxStdDev + 0.7 * (rgba.a - 1.0);
     }
+    adjustedStdDev = gaussianKernelScale(adjustedMaxStdDev, gaussianK);
 
     // Compute the view space center of the splat
     vec3 viewCenter = (!enableCovSplats ? quatVec(renderToViewQuat, center) : (renderToViewBasis * center)) + renderToViewPos;

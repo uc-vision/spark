@@ -65,6 +65,13 @@ export interface SparkRendererOptions {
    * @default Math.sqrt(8)
    */
   maxStdDev?: number;
+  /**
+   * Generalized Gaussian exponent parameter. The kernel is
+   * `exp(-0.5 * r ** (2 * gaussianK))`, so `1.0` is a normal Gaussian and `2.0`
+   * uses a quartic radial falloff.
+   * @default 1.0
+   */
+  gaussianK?: number;
   /*
    **
    * Minimum pixel radius for splat rendering.
@@ -334,6 +341,7 @@ export class SparkRenderer extends THREE.Mesh {
 
   renderSize = new THREE.Vector2();
   maxStdDev: number;
+  gaussianK: number;
   minPixelRadius: number;
   maxPixelRadius: number;
   accumExtSplats: boolean;
@@ -505,6 +513,7 @@ export class SparkRenderer extends THREE.Mesh {
     this.preUpdate = options.preUpdate ?? true;
 
     this.maxStdDev = options.maxStdDev ?? Math.sqrt(8.0);
+    this.gaussianK = options.gaussianK ?? 1.0;
     this.minPixelRadius = options.minPixelRadius ?? 0.0; //1.6;
     this.maxPixelRadius = options.maxPixelRadius ?? 512.0;
     this.accumExtSplats = options.accumExtSplats ?? false;
@@ -625,6 +634,8 @@ export class SparkRenderer extends THREE.Mesh {
       renderToViewOffset: { value: new THREE.Vector3() },
       // Maximum distance (in stddevs) from Gsplat center to render
       maxStdDev: { value: 1.0 },
+      // Generalized Gaussian k. The radial exponent is 2 * gaussianK.
+      gaussianK: { value: 1.0 },
       // Minimum pixel radius for splat rendering
       minPixelRadius: { value: 0.0 },
       // Maximum pixel radius for splat rendering
@@ -785,6 +796,7 @@ export class SparkRenderer extends THREE.Mesh {
     this.uniforms.renderToViewBasis.value.setFromMatrix4(accumToCamera);
 
     this.uniforms.maxStdDev.value = spark.maxStdDev;
+    this.uniforms.gaussianK.value = spark.gaussianK;
     this.uniforms.minPixelRadius.value = spark.minPixelRadius;
     this.uniforms.maxPixelRadius.value = spark.maxPixelRadius;
     this.uniforms.minAlpha.value = spark.minAlpha;
