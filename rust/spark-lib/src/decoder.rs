@@ -118,6 +118,7 @@ pub struct SplatProps<'a> {
     pub sh1: &'a [f32],
     pub sh2: &'a [f32],
     pub sh3: &'a [f32],
+    pub labels: &'a [f32],
     pub child_count: &'a [u16],
     pub child_start: &'a [usize],
 }
@@ -133,6 +134,7 @@ impl<'a> Default for SplatProps<'a> {
             sh1: &[],
             sh2: &[],
             sh3: &[],
+            labels: &[],
             child_count: &[],
             child_start: &[],
         }
@@ -652,6 +654,9 @@ pub fn copy_getter_to_receiver<G: SplatGetter, R: SplatReceiver>(getter: &mut G,
     let mut sh1: Vec<f32> = Vec::new();
     let mut sh2: Vec<f32> = Vec::new();
     let mut sh3: Vec<f32> = Vec::new();
+    
+    #[warn(unused)]
+    let mut labels: Vec<f32> = Vec::new();
     let mut child_count: Vec<u16> = Vec::new();
     let mut child_start: Vec<usize> = Vec::new();
 
@@ -706,6 +711,7 @@ pub fn copy_getter_to_receiver<G: SplatGetter, R: SplatReceiver>(getter: &mut G,
             rgb: &rgb[..count * 3],
             scale: &scale[..count * 3],
             quat: &quat[..count * 4],
+            labels: &labels[..count * 4],
             sh1: sh1_slice,
             sh2: sh2_slice,
             sh3: sh3_slice,

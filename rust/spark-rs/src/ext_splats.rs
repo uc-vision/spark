@@ -17,6 +17,7 @@ pub struct ExtSplatsData {
     pub num_splats: usize,
     pub max_sh_degree: usize,
     pub ext_arrays: [Uint32Array; 2],
+    pub labels: Option<Uint32Array>,
     pub sh1: Option<Uint32Array>,
     pub sh2: Option<Uint32Array>,
     pub sh3a: Option<Uint32Array>,
@@ -44,6 +45,7 @@ impl ExtSplatsData {
             num_splats: 0,
             max_sh_degree: 0,
             ext_arrays: [Uint32Array::new_with_length(0), Uint32Array::new_with_length(0)],
+            labels: None,
             sh1: None,
             sh2: None,
             sh3a: None,
@@ -72,6 +74,9 @@ impl ExtSplatsData {
         Reflect::set(&object, &JsValue::from_str("maxShDegree"), &JsValue::from(self.max_sh_degree as u32)).unwrap();
         Reflect::set(&object, &JsValue::from_str("ext0"), &JsValue::from(self.ext_arrays[0].clone())).unwrap();
         Reflect::set(&object, &JsValue::from_str("ext1"), &JsValue::from(self.ext_arrays[1].clone())).unwrap();
+        if let Some(labels) = self.labels.as_ref() {
+            Reflect::set(&object, &JsValue::from_str("labels"), &JsValue::from(labels)).unwrap();
+        }
         if let Some(sh1) = self.sh1.as_ref() {
             Reflect::set(&object, &JsValue::from_str("sh1"), &JsValue::from(sh1)).unwrap();
         }
@@ -373,6 +378,8 @@ impl SplatReceiver for ExtSplatsData {
         self.ext_arrays[0] = Uint32Array::new_with_length((max_splats * 4) as u32);
         self.ext_arrays[1] = Uint32Array::new_with_length((max_splats * 4) as u32);
 
+        self.labels = Some(Uint32Array::new_with_length((max_splats * 4) as u32));
+
         self.sh1 = if init.max_sh_degree < 1 { None } else {
             Some(Uint32Array::new_with_length((max_splats * 4) as u32))
         };
@@ -488,6 +495,23 @@ impl SplatReceiver for ExtSplatsData {
         self.buffer_dirty = true;
 
         self.set_sh(base, count, batch.sh1, batch.sh2, batch.sh3);
+        
+        // Set Labels
+        if !batch.labels.is_empty() {
+            self.invalidate_buffers();
+            self.ensure_buffer_a(count);
+            if let Some(packed_labels) = self.labels.as_ref() {
+                let buffer = &mut self.buffer_a[0..count * 4];
+                for i in 0..count {
+                    let i4 = i * 4;
+                    buffer[i4] = batch.labels[i4] as u32;
+                    buffer[i4 + 1] = batch.labels[i4 + 1] as u32;
+                    buffer[i4 + 2] = 0;
+                    buffer[i4 + 3] = 255;
+                }
+                packed_labels.subarray((base * 4) as u32, ((base + count) * 4) as u32).copy_from(buffer);
+            }
+        }
 
         if !batch.child_count.is_empty() {
             self.set_child_count(base, count, batch.child_count);

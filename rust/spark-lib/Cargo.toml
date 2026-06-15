@@ -23,3 +23,6 @@ image.workspace = true
 hnsw.workspace = true
 rand_pcg.workspace = true
 space.workspace = true
+log = "0.4.32"
+env_logger = "0.11.10"
+serde_path_to_error = "0.1.20"

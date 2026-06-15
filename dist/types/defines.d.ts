@@ -70,6 +70,7 @@ export type PackedResult = {
     splatEncoding: SplatEncoding;
 };
 export type ExtExtra = {
+    labels?: Uint32Array;
     sh1?: Uint32Array;
     sh2?: Uint32Array;
     sh3a?: Uint32Array;

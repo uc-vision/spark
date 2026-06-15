@@ -21,11 +21,6 @@ export interface SparkRendererOptions {
      */
     premultipliedAlpha?: boolean;
     /**
-     * Whether to encode Gsplat with linear RGB (for environment mapping)
-     * @default false
-     */
-    encodeLinear?: boolean;
-    /**
      * Pass in a THREE.Clock to synchronize time-based effects across different
      * systems. Alternatively, you can set the property time directly.
      * (default: new THREE.Clock)
@@ -50,6 +45,13 @@ export interface SparkRendererOptions {
      * @default Math.sqrt(8)
      */
     maxStdDev?: number;
+    /**
+     * Generalized Gaussian exponent parameter. The kernel is
+     * `exp(-0.5 * r ** (2 * gaussianK))`, so `1.0` is a normal Gaussian and `2.0`
+     * uses a quartic radial falloff.
+     * @default 1.0
+     */
+    gaussianK?: number;
     minPixelRadius?: number;
     /**
      * Maximum pixel radius for splat rendering.
@@ -180,6 +182,7 @@ export interface SparkRendererOptions {
      * @default false
      */
     lodInflate?: boolean;
+    lodTraverseMode?: "dynamic" | "standard";
     /**
      * Whether to use extended Gsplat encoding for paged splats, useful for eliminating
      * quantization artifacts from splat scenes with large internal position coordinates.
@@ -306,6 +309,7 @@ export declare class SparkRenderer extends THREE.Mesh {
     static sparkOverride?: SparkRenderer;
     renderSize: THREE.Vector2;
     maxStdDev: number;
+    gaussianK: number;
     minPixelRadius: number;
     maxPixelRadius: number;
     accumExtSplats: boolean;
@@ -319,7 +323,6 @@ export declare class SparkRenderer extends THREE.Mesh {
     falloff: number;
     clipXY: number;
     focalAdjustment: number;
-    encodeLinear: boolean;
     sortRadial: boolean;
     minSortIntervalMs: number;
     clock: THREE.Clock;
@@ -349,6 +352,7 @@ export declare class SparkRenderer extends THREE.Mesh {
     lodSplatScale: number;
     lodRenderScale: number;
     lodInflate: boolean;
+    lodTraverseMode: "dynamic" | "standard";
     pagedExtSplats: boolean;
     maxPagedSplats: number;
     numLodFetchers: number;
@@ -439,6 +443,9 @@ export declare class SparkRenderer extends THREE.Mesh {
             value: THREE.Vector3;
         };
         maxStdDev: {
+            value: number;
+        };
+        gaussianK: {
             value: number;
         };
         minPixelRadius: {

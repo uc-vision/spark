@@ -377,6 +377,7 @@ type DecodedExtResult = {
   numSplats: number;
   ext0: Uint32Array;
   ext1: Uint32Array;
+  labels?: Uint32Array;
   sh1?: Uint32Array;
   sh2?: Uint32Array;
   sh3a?: Uint32Array;
@@ -392,6 +393,7 @@ function toExtResult(packed: DecodedExtResult): ExtResult {
     numSplats: packed.numSplats,
     extArrays: [packed.ext0, packed.ext1],
     extra: {
+      labels: packed.labels,
       sh1: packed.sh1,
       sh2: packed.sh2,
       sh3a: packed.sh3a,
@@ -464,6 +466,7 @@ async function loadExtSplats(
       sendStatus,
     });
     const result = toExtResult(decoded as DecodedExtResult);
+
     if (result.extra.lodTree) {
       return { lodSplats: result };
     }

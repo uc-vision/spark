@@ -3,6 +3,7 @@ use std::{collections::HashMap, io::Cursor};
 use anyhow::{anyhow, Context};
 use image::{DynamicImage, GenericImageView, ImageReader};
 use serde_json;
+use serde_path_to_error;
 use serde::Deserialize;
 use zip::ZipArchive;
 
@@ -26,6 +27,7 @@ struct PcSogsV2 {
     means: Means,
     scales: ScalesV2,
     quats: Quats,
+    labels: Option<Labels>,
     sh0: Sh0V2,
     #[serde(rename = "shN")]
     shn: Option<ShNV2>,
@@ -36,9 +38,16 @@ struct PcSogsV1 {
     means: MeansV1,
     scales: ScalesV1,
     quats: Quats,
+    labels: Option<Labels>,
     sh0: Sh0V1,
     #[serde(rename = "shN")]
     shn: Option<ShNV1>,
+}
+
+#[derive(Debug, Deserialize)]
+struct Labels {
+    info: std::collections::HashMap<String, f64>,
+    files: [String; 1],
 }
 
 #[derive(Debug, Deserialize)]
@@ -163,7 +172,8 @@ fn decode_sogs<T: SplatReceiver>(bytes: &[u8], splats: &mut T, _pathname: Option
         std::io::copy(&mut meta_file, &mut meta_bytes)?;
         meta_bytes
     };
-    let meta: PcSogsRoot = serde_json::from_slice(&meta_bytes)
+    let jd = &mut serde_json::Deserializer::from_slice(&meta_bytes);
+    let meta: PcSogsRoot = serde_path_to_error::deserialize(jd)
         .context("Failed to parse meta.json for SOGS")?;
 
     let mut file_cache: HashMap<String, Vec<u8>> = HashMap::new();
@@ -207,6 +217,7 @@ fn decode_v2<T: SplatReceiver>(
     let mut quat = vec![0.0f32; num_splats * 4];
     let mut rgb = vec![0.0f32; num_splats * 3];
     let mut opacity = vec![0.0f32; num_splats];
+    
     let mut sh1: Vec<f32> = if max_sh_degree >= 1 { vec![0.0; num_splats * 9] } else { Vec::new() };
     let mut sh2: Vec<f32> = if max_sh_degree >= 2 { vec![0.0; num_splats * 15] } else { Vec::new() };
     let mut sh3: Vec<f32> = if max_sh_degree >= 3 { vec![0.0; num_splats * 21] } else { Vec::new() };
@@ -218,6 +229,12 @@ fn decode_v2<T: SplatReceiver>(
     decode_scales_v2(&meta.scales.codebook, &scales_img, &mut scale)?;
     decode_quats(&quats_img, &mut quat)?;
     decode_sh0_v2(&meta.sh0.codebook, &sh0_img, &mut rgb, &mut opacity)?;
+
+    let mut labels = vec![0.0f32; num_splats * 4];
+    if let Some(meta_labels) = meta.labels {
+        let labels_img = decode_rgba(&get_file(&meta_labels.files[0])?).context("decode labels")?;
+        decode_labels(&labels_img, &mut labels)?;
+    }
 
     if let Some(shn) = meta.shn {
         decode_shn_v2(
@@ -239,9 +256,10 @@ fn decode_v2<T: SplatReceiver>(
         &quat,
         &rgb,
         &opacity,
-        &sh1,
+        &labels,
         &sh2,
         &sh3,
+        &labels
     )
 }
 
@@ -295,6 +313,12 @@ fn decode_v1<T: SplatReceiver>(
     decode_quats(&quats_img, &mut quat)?;
     decode_sh0_v1(&meta.sh0.mins, &meta.sh0.maxs, &sh0_img, &mut rgb, &mut opacity)?;
 
+    let mut labels = vec![0.0f32; num_splats * 4];
+    if let Some(meta_labels) = meta.labels {
+        let labels_img = decode_rgba(&get_file(&meta_labels.files[0])?).context("decode labels")?;
+        decode_labels(&labels_img, &mut labels)?;
+    }
+
     if let Some(shn) = meta.shn {
         decode_shn_v1(
             shn,
@@ -319,6 +343,7 @@ fn decode_v1<T: SplatReceiver>(
         &sh1,
         &sh2,
         &sh3,
+        &labels
     )
 }
 
@@ -345,6 +370,21 @@ fn decode_means(
         out_center[i3] = x;
         out_center[i3 + 1] = y;
         out_center[i3 + 2] = z;
+    }
+    Ok(())
+}
+
+fn decode_labels(
+    img: &ImageData,
+    out_center: &mut [f32],
+) -> anyhow::Result<()> {
+    let num_splats = out_center.len() / 4;
+    for i in 0..num_splats {
+        let i4 = i * 4;
+        let label = img.rgba[i4] as f32;
+        let instance = (img.rgba[i4 + 1] as u16 | ((img.rgba[i4 + 2] as u16) << 8)) as f32;
+        out_center[i4] = label;
+        out_center[i4 + 1] = instance;
     }
     Ok(())
 }
@@ -543,6 +583,7 @@ fn emit_to_receiver<T: SplatReceiver>(
     sh1: &[f32],
     sh2: &[f32],
     sh3: &[f32],
+    labels: &[f32],
 ) -> anyhow::Result<()> {
     let mut base = 0usize;
     while base < num_splats {
@@ -558,6 +599,7 @@ fn emit_to_receiver<T: SplatReceiver>(
                 rgb: &rgb[i3..i3 + count * 3],
                 scale: &scale[i3..i3 + count * 3],
                 quat: &quat[i4..i4 + count * 4],
+                labels: &labels[i4..i4 + count * 4],
                 sh1: if max_sh_degree >= 1 { &sh1[base * 9..base * 9 + count * 9] } else { &[] },
                 sh2: if max_sh_degree >= 2 { &sh2[base * 15..base * 15 + count * 15] } else { &[] },
                 sh3: if max_sh_degree >= 3 { &sh3[base * 21..base * 21 + count * 21] } else { &[] },
@@ -581,6 +623,9 @@ fn preload_all(
             for f in v2.scales.files.iter() { preload_file(zip, prefix, cache, f)?; }
             for f in v2.quats.files.iter() { preload_file(zip, prefix, cache, f)?; }
             for f in v2.sh0.files.iter() { preload_file(zip, prefix, cache, f)?; }
+            if let Some(labels) = &v2.labels {
+                for f in labels.files.iter() { preload_file(zip, prefix, cache, f)?; }
+            }
             if let Some(shn) = &v2.shn {
                 for f in shn.files.iter() { preload_file(zip, prefix, cache, f)?; }
             }
