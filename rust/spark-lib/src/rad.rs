@@ -693,16 +693,16 @@ impl<T: SplatGetter> RadEncoder<T> {
             (RadChunkPropertyEncoding::U32, encode_usize_as_u32(
                 &buffer[..count].iter().map(|&v| v as usize).collect::<Vec<_>>(), 1, count
             ))
-    };
+        };
 
-    let meta = RadChunkProperty {
-        property,
-        encoding: encoding_variant,
-        compression: Some(RadChunkPropertyCompression::Gz),
-        ..Default::default()
-    };
-    (meta, compress_to_vec(&bytes, GZ_LEVEL))
-}
+        let meta = RadChunkProperty {
+            property,
+            encoding: encoding_variant,
+            compression: Some(RadChunkPropertyCompression::Gz),
+            ..Default::default()
+        };
+        (meta, compress_to_vec(&bytes, GZ_LEVEL))
+    }
 
     fn encode_chunk_rgb(&mut self, base: usize, count: usize, buffer: &mut Vec<f32>, encoding: &SplatEncoding) -> (RadChunkProperty, Vec<u8>) {
         if buffer.len() < count * 3 {
@@ -904,7 +904,10 @@ impl<T: SplatGetter> RadEncoder<T> {
 
     fn encode_chunk(
         &mut self, base: usize, count: usize, encoding: &SplatEncoding,
-        buffer: &mut Vec<f32>, buffer_u16: &mut Vec<u16>, buffer_usize: &mut Vec<usize>, buffer_u32: &mut Vec<u32>,
+        buffer: &mut Vec<f32>,
+        buffer_u16: &mut Vec<u16>,
+        buffer_usize: &mut Vec<usize>,
+        buffer_u32: &mut Vec<u32>,
     ) -> anyhow::Result<Vec<u8>> {
         let max_sh = self.getter.max_sh_degree().min(self.max_sh);
 
@@ -916,10 +919,8 @@ impl<T: SplatGetter> RadEncoder<T> {
             self.encode_chunk_orientation(base, count, buffer),
         ];
 
-        if self.getter.has_labels() {
-            props.push(self.encode_chunk_label(base, count, buffer_u32, RadChunkPropertyName::Label));
-            props.push(self.encode_chunk_label(base, count, buffer_u32, RadChunkPropertyName::InstanceLabel));
-        }
+        props.push(self.encode_chunk_label(base, count, buffer_u32, RadChunkPropertyName::Label));
+        props.push(self.encode_chunk_label(base, count, buffer_u32, RadChunkPropertyName::InstanceLabel));
 
         let num_clusters = self.sh_clusters.as_ref().map(|c| c.num_clusters);
         if let Some(num_clusters) = num_clusters {

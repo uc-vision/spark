@@ -191,7 +191,7 @@ impl<T: SplatReceiver> PlyDecoder<T> {
 
                 if let Some(label) = state.label {
                     state.out_labels[i4 + 0] = label[0].get_f32(&self.buffer, base);
-                    state.out_labels[i4 + 1] = label[1].get_f32(&self.buffer, base);
+                    state.out_labels[i4 + 1] = label[1].get_f32(&self.buffer, base) + (1 as f32); // Remove once unsigned short
                 }
 
                 if let Some(sh1) = state.sh1 {
