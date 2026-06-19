@@ -378,7 +378,7 @@ type DecodedExtResult = {
   ext0: Uint32Array;
   ext1: Uint32Array;
   labels?: Uint32Array;
-  label_info?: Record<string, number>,
+  label_info?: Record<string, number>;
   sh1?: Uint32Array;
   sh2?: Uint32Array;
   sh3a?: Uint32Array;
@@ -468,7 +468,7 @@ async function loadExtSplats(
       sendStatus,
     });
     const result = toExtResult(decoded as DecodedExtResult);
-    console.log(result)
+    console.log(result);
 
     if (result.extra.lodTree) {
       return { lodSplats: result };
