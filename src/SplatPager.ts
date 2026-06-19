@@ -286,8 +286,9 @@ export class PagedSplats implements SplatSource {
         sh3Codes: sh3Codes
           ? [sh3Codes[0].slice(), sh3Codes[1].slice()]
           : undefined,
-      })) as { lodSplats: ExtResult };
+      })) as { lodSplats: ExtResult };      
       const lodSplats = result.lodSplats;
+
       if (!this.splatEncoding) {
         this.splatEncoding = DEFAULT_SPLAT_ENCODING;
         this.numSh =

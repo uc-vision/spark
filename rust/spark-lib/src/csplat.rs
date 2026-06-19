@@ -55,6 +55,8 @@ impl<'a> Tsplat for CsplatRef<'a> {
     fn scales(&self) -> Vec3A { get_scales(self.splat, self.encoding) }
     fn quaternion(&self) -> Quat { get_quaternion(self.splat) }
     fn max_scale(&self) -> f32 { get_max_scale(self.splat, self.encoding) }
+    fn label(&self) -> f32 { 0.0 }
+    fn instance_label(&self) -> f32 { 0.0 }
 }
 
 impl<'a> Tsplat for CsplatRefMut<'a> {
@@ -64,6 +66,8 @@ impl<'a> Tsplat for CsplatRefMut<'a> {
     fn scales(&self) -> Vec3A { get_scales(self.splat, self.encoding) }
     fn quaternion(&self) -> Quat { get_quaternion(self.splat) }
     fn max_scale(&self) -> f32 { get_max_scale(self.splat, self.encoding) }
+    fn label(&self) -> f32 { 0.0 } // TODO: Care about this for compressed splats
+    fn instance_label(&self) -> f32 { 0.0 }
 }
 
 fn get_center(splat: &Csplat) -> Vec3A {
@@ -122,6 +126,8 @@ impl<'a> TsplatMut for CsplatRefMut<'a> {
     fn set_rgb(&mut self, rgb: Vec3A) { set_rgb(self.splat, rgb, self.encoding); }
     fn set_scales(&mut self, scales: Vec3A) { set_scales(self.splat, scales, self.encoding); }
     fn set_quaternion(&mut self, quaternion: Quat) { set_quaternion(self.splat, quaternion); }
+    fn set_label(&mut self, label: f32) { todo!(); }
+    fn set_instance_label(&mut self, instance_label: f32) { todo!(); }
 }
 
 pub struct CsplatArray {
@@ -670,6 +676,18 @@ impl SplatGetter for CsplatArray {
     fn get_opacity(&mut self, base: usize, count: usize, out: &mut [f32]) {
         for i in 0..count {
             out[i] = self.get(base + i).opacity();
+        }
+    }
+
+    fn get_label(&mut self, base: usize, count: usize, out: &mut [u32]) {
+        for i in 0..count {
+            out[i] = self.get(base + i).label() as u32;
+        }
+    }
+
+    fn get_instance_label(&mut self, base: usize, count: usize, out: &mut [u32]) {
+        for i in 0..count {
+            out[i] = self.get(base + i).instance_label() as u32;
         }
     }
 

@@ -1,4 +1,6 @@
 use std::array;
+use std::collections::HashMap;
+use serde_wasm_bindgen::to_value;
 
 use js_sys::{Array, Object, Reflect, Uint32Array};
 use spark_lib::{
@@ -18,6 +20,7 @@ pub struct ExtSplatsData {
     pub max_sh_degree: usize,
     pub ext_arrays: [Uint32Array; 2],
     pub labels: Option<Uint32Array>,
+    pub label_info: Option<HashMap<std::string::String, f64>>,
     pub sh1: Option<Uint32Array>,
     pub sh2: Option<Uint32Array>,
     pub sh3a: Option<Uint32Array>,
@@ -46,6 +49,7 @@ impl ExtSplatsData {
             max_sh_degree: 0,
             ext_arrays: [Uint32Array::new_with_length(0), Uint32Array::new_with_length(0)],
             labels: None,
+            label_info: None,
             sh1: None,
             sh2: None,
             sh3a: None,
@@ -76,6 +80,10 @@ impl ExtSplatsData {
         Reflect::set(&object, &JsValue::from_str("ext1"), &JsValue::from(self.ext_arrays[1].clone())).unwrap();
         if let Some(labels) = self.labels.as_ref() {
             Reflect::set(&object, &JsValue::from_str("labels"), &JsValue::from(labels)).unwrap();
+        }
+        if let Some(label_info) = self.label_info.as_ref() {
+            let js_label_info = to_value(&label_info).unwrap();
+            Reflect::set(&object, &JsValue::from_str("label_info"), &js_label_info).unwrap();
         }
         if let Some(sh1) = self.sh1.as_ref() {
             Reflect::set(&object, &JsValue::from_str("sh1"), &JsValue::from(sh1)).unwrap();
@@ -498,6 +506,7 @@ impl SplatReceiver for ExtSplatsData {
         
         // Set Labels
         if !batch.labels.is_empty() {
+            self.label_info = batch.label_info.clone();
             self.invalidate_buffers();
             self.ensure_buffer_a(count);
             if let Some(packed_labels) = self.labels.as_ref() {
@@ -872,6 +881,28 @@ impl SplatGetter for ExtSplatsData {
     fn max_sh_degree(&self) -> usize { self.max_sh_degree }
     fn has_lod_tree(&self) -> bool { self.lod_tree.is_some() }
     fn get_encoding(&mut self) -> Option<SplatEncoding> { None }
+
+    fn get_label(&mut self, base: usize, count: usize, out: &mut [u32]) {
+        if count == 0 { return; }
+        self.prepare_buffers(base, count);
+        if let Some(labels) = self.labels.as_ref() {
+            for i in 0..count {
+                let i4: u32 = (i * 4) as u32;
+                out[i] = (*labels).get_index(i4);
+            }
+        }
+    }
+
+    fn get_instance_label(&mut self, base: usize, count: usize, out: &mut [u32]) {
+        if count == 0 { return; }
+        self.prepare_buffers(base, count);
+         if let Some(labels) = self.labels.as_ref() {
+            for i in 0..count {
+                let i4: u32 = (i * 4) as u32;
+                out[i] = (*labels).get_index(i4);
+            }
+        }
+    }
 
     fn get_batch(&mut self, base: usize, count: usize, out: &mut SplatPropsMut) {
         if count == 0 { return; }

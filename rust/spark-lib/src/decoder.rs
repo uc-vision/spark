@@ -1,4 +1,5 @@
 use std::any::Any;
+use std::{collections::HashMap};
 
 use miniz_oxide::inflate::{core::{decompress, inflate_flags::{TINFL_FLAG_HAS_MORE_INPUT, TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF}, DecompressorOxide}, TINFLStatus};
 use serde::{Deserialize, Serialize};
@@ -119,6 +120,7 @@ pub struct SplatProps<'a> {
     pub sh2: &'a [f32],
     pub sh3: &'a [f32],
     pub labels: &'a [f32],
+    pub label_info: Option<HashMap<std::string::String, f64>>,
     pub child_count: &'a [u16],
     pub child_start: &'a [usize],
 }
@@ -135,6 +137,7 @@ impl<'a> Default for SplatProps<'a> {
             sh2: &[],
             sh3: &[],
             labels: &[],
+            label_info: None,
             child_count: &[],
             child_start: &[],
         }
@@ -157,6 +160,9 @@ pub trait SplatReceiver: 'static {
     fn set_scale(&mut self, base: usize, count: usize, scale: &[f32]);
     fn set_quat(&mut self, base: usize, count: usize, quat: &[f32]);
 
+    fn set_label(&mut self, base: usize, count: usize, values: &[u32]) {}
+    fn set_instance_label(&mut self, base: usize, count: usize, values: &[u32]) {}
+    
     fn set_sh(&mut self, base: usize, count: usize, sh1: &[f32], sh2: &[f32], sh3: &[f32]) {}
     fn set_sh1(&mut self, base: usize, count: usize, sh1: &[f32]) {}
     fn set_sh2(&mut self, base: usize, count: usize, sh2: &[f32]) {}
@@ -327,6 +333,9 @@ pub trait SplatGetter: 'static {
 
     fn get_child_count(&mut self, _base: usize, _count: usize, _out: &mut [u16]) {}
     fn get_child_start(&mut self, _base: usize, _count: usize, _out: &mut [usize]) {}
+    fn get_label(&mut self, base: usize, count: usize, out: &mut [u32]);
+    fn get_instance_label(&mut self, base: usize, count: usize, out: &mut [u32]);
+    fn has_labels(&self) -> bool { false }  // default opt-in
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -656,7 +665,8 @@ pub fn copy_getter_to_receiver<G: SplatGetter, R: SplatReceiver>(getter: &mut G,
     let mut sh3: Vec<f32> = Vec::new();
     
     #[warn(unused)]
-    let mut labels: Vec<f32> = Vec::new();
+    let labels: Vec<f32> = Vec::new();
+    let label_info: Option<std::collections::HashMap<String, f64>> = None;
     let mut child_count: Vec<u16> = Vec::new();
     let mut child_start: Vec<usize> = Vec::new();
 
@@ -712,6 +722,7 @@ pub fn copy_getter_to_receiver<G: SplatGetter, R: SplatReceiver>(getter: &mut G,
             scale: &scale[..count * 3],
             quat: &quat[..count * 4],
             labels: &labels[..count * 4],
+            label_info: label_info.clone(),
             sh1: sh1_slice,
             sh2: sh2_slice,
             sh3: sh3_slice,

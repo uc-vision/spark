@@ -430,6 +430,7 @@ export class SplatMesh extends SplatGenerator {
       });
     } else {
       this.isInitialized = true;
+      
       this.initialized = Promise.resolve(this);
       if (options.onLoad) {
         const maybePromise = options.onLoad(this);
@@ -503,7 +504,7 @@ export class SplatMesh extends SplatGenerator {
         this.splats = this.extSplats;
       }
     }
-
+    
     if (this.splats) {
       this.numSplats = this.splats.getNumSplats();
       this.updateGenerator();

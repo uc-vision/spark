@@ -6,8 +6,6 @@ use spark_lib::gsplat::GsplatArray as GsplatArrayInner;
 use spark_lib::csplat::CsplatArray as CsplatArrayInner;
 use spark_lib::tsplat::TsplatArray;
 use wasm_bindgen::prelude::*;
-use web_sys::console;
-use log::{info};
 
 use crate::ext_splats::ExtSplatsData;
 use crate::{decoder::ChunkDecoder, packed_splats::PackedSplatsData};
@@ -134,23 +132,6 @@ pub fn decode_to_packedsplats(
 }
 
 #[wasm_bindgen]
-pub fn log_property(obj: &JsValue, property_name: &str) {
-    // 1. Convert the Rust &str key into a JsValue key
-    let key = JsValue::from_str(property_name);
-
-    // 2. Reflectively look up the property from the object
-    match js_sys::Reflect::get(obj, &key) {
-        Ok(value) => {
-            // 3. Log the nested JsValue directly to the browser console
-            console::log_1(&value);
-        }
-        Err(err) => {
-            console::error_1(&format!("Failed to read property: {:?}", err).into());
-        }
-    }
-}
-
-#[wasm_bindgen]
 pub fn decode_to_extsplats(
     file_type: Option<String>, path_name: Option<String>,
     sh1_codes: Option<Uint32Array>, sh2_codes: Option<Uint32Array>, sh3_codes: Option<Array>,
@@ -163,7 +144,6 @@ pub fn decode_to_extsplats(
     } else {
         None
     };
-    console_log::init_with_level(log::Level::Debug).expect("error initializing log");
 
     let mut splats = ExtSplatsData::new();
     splats.set_sh_codes(sh1_codes, sh2_codes, sh3_codes);

@@ -36,6 +36,8 @@ pub struct RadEncoder<T: SplatGetter> {
     pub rgb_encoding: RadRgbEncoding,
     pub scales_encoding: RadScalesEncoding,
     pub orientation_encoding: RadOrientationEncoding,
+    pub label_encoding: RadLabelEncoding,
+    pub instance_label_encoding: RadLabelEncoding,
     pub sh_encoding: RadShEncoding,
     pub sh_label_encoding: RadShLabelEncoding,
     pub sh_clusters: Option<ShClusters>,
@@ -78,6 +80,15 @@ pub enum RadScalesEncoding {
     F32,
     Ln0R8,
     LnF16,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RadLabelEncoding {
+    #[default]
+    Auto,
+    U8,
+    U16,
+    U32,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -191,6 +202,10 @@ pub enum RadChunkPropertyName {
     Scales,
     #[serde(rename = "orientation")]
     Orientation,
+    #[serde(rename = "label")]
+    Label,
+    #[serde(rename = "instance_label")]
+    InstanceLabel,
     #[serde(rename = "sh1")]
     Sh1,
     #[serde(rename = "sh2")]
@@ -214,6 +229,8 @@ pub enum RadChunkPropertyName {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RadChunkPropertyEncoding {
     #[default]
+    #[serde(rename = "u8")]
+    U8,
     #[serde(rename = "f32")]
     F32,
     #[serde(rename = "f16")]
@@ -259,6 +276,8 @@ impl<T: SplatGetter> RadEncoder<T> {
             rgb_encoding: RadRgbEncoding::default(),
             scales_encoding: RadScalesEncoding::default(),
             orientation_encoding: RadOrientationEncoding::default(),
+            label_encoding: RadLabelEncoding::default(),
+            instance_label_encoding: RadLabelEncoding::default(),
             sh_encoding: RadShEncoding::default(),
             sh_label_encoding: RadShLabelEncoding::default(),
             sh_clusters: None,
@@ -537,6 +556,9 @@ impl<T: SplatGetter> RadEncoder<T> {
             buffer_usize.resize(CHUNK_SIZE, 0);
         }
 
+        let mut buffer_u32 = Vec::new();
+        buffer_u32.resize(CHUNK_SIZE, 0u32);
+
         let num_chunks = num_splats.div_ceil(CHUNK_SIZE);
         let mut chunks = Vec::with_capacity(num_chunks);
         let mut chunk_ranges = Vec::with_capacity(num_chunks);
@@ -545,7 +567,7 @@ impl<T: SplatGetter> RadEncoder<T> {
         for chunk_index in 0..num_chunks {
             let base = chunk_index * CHUNK_SIZE;
             let count = (num_splats - base).min(CHUNK_SIZE);
-            let chunk = self.encode_chunk(base, count, &encoding, &mut buffer, &mut buffer_u16, &mut buffer_usize)?;
+            let chunk = self.encode_chunk(base, count, &encoding, &mut buffer, &mut buffer_u16, &mut buffer_usize, &mut buffer_u32)?;
 
             let filename = if chunk_prefix.is_empty() { None } else {
                 Some(format!("{}{}.radc", chunk_prefix, chunk_index))
@@ -647,6 +669,40 @@ impl<T: SplatGetter> RadEncoder<T> {
         };
         (meta, compress_to_vec(&bytes, GZ_LEVEL))
     }
+
+    fn encode_chunk_label(&mut self, base: usize, count: usize, buffer: &mut Vec<u32>, property: RadChunkPropertyName,) -> (RadChunkProperty, Vec<u8>) {
+        if buffer.len() < count {
+            buffer.resize(count, 0);
+        }
+        match property {
+            RadChunkPropertyName::Label => self.getter.get_label(base, count, &mut buffer[..count]),
+            RadChunkPropertyName::InstanceLabel => self.getter.get_instance_label(base, count, &mut buffer[..count]),
+            _ => unreachable!(),
+        }
+
+        // Auto-resolve: scan for max value to pick smallest encoding
+        let max_val = buffer[..count].iter().copied().max().unwrap_or(0);
+        let (encoding_variant, bytes) = if max_val <= 255 {
+            let bytes: Vec<u8> = buffer[..count].iter().map(|&v| v as u8).collect();
+            (RadChunkPropertyEncoding::U8, bytes)  // you'd need to add U8 to the encoding enum
+        } else if max_val <= 65535 {
+            (RadChunkPropertyEncoding::U16, encode_usize_as_u16(
+                &buffer[..count].iter().map(|&v| v as usize).collect::<Vec<_>>(), 1, count
+            ))
+        } else {
+            (RadChunkPropertyEncoding::U32, encode_usize_as_u32(
+                &buffer[..count].iter().map(|&v| v as usize).collect::<Vec<_>>(), 1, count
+            ))
+    };
+
+    let meta = RadChunkProperty {
+        property,
+        encoding: encoding_variant,
+        compression: Some(RadChunkPropertyCompression::Gz),
+        ..Default::default()
+    };
+    (meta, compress_to_vec(&bytes, GZ_LEVEL))
+}
 
     fn encode_chunk_rgb(&mut self, base: usize, count: usize, buffer: &mut Vec<f32>, encoding: &SplatEncoding) -> (RadChunkProperty, Vec<u8>) {
         if buffer.len() < count * 3 {
@@ -848,7 +904,7 @@ impl<T: SplatGetter> RadEncoder<T> {
 
     fn encode_chunk(
         &mut self, base: usize, count: usize, encoding: &SplatEncoding,
-        buffer: &mut Vec<f32>, buffer_u16: &mut Vec<u16>, buffer_usize: &mut Vec<usize>,
+        buffer: &mut Vec<f32>, buffer_u16: &mut Vec<u16>, buffer_usize: &mut Vec<usize>, buffer_u32: &mut Vec<u32>,
     ) -> anyhow::Result<Vec<u8>> {
         let max_sh = self.getter.max_sh_degree().min(self.max_sh);
 
@@ -859,6 +915,11 @@ impl<T: SplatGetter> RadEncoder<T> {
             self.encode_chunk_scales(base, count, buffer, encoding),
             self.encode_chunk_orientation(base, count, buffer),
         ];
+
+        if self.getter.has_labels() {
+            props.push(self.encode_chunk_label(base, count, buffer_u32, RadChunkPropertyName::Label));
+            props.push(self.encode_chunk_label(base, count, buffer_u32, RadChunkPropertyName::InstanceLabel));
+        }
 
         let num_clusters = self.sh_clusters.as_ref().map(|c| c.num_clusters);
         if let Some(num_clusters) = num_clusters {
@@ -1778,6 +1839,21 @@ impl<T: SplatReceiver> RadDecoder<T> {
                     }
                     let child_starts = decode_u32_as_usize(data, 1, self.count);
                     self.splats.set_child_start(self.base, self.count, &child_starts);
+                },
+                RadChunkPropertyName::Label | RadChunkPropertyName::InstanceLabel => {
+                    let values = match prop.encoding {
+                        RadChunkPropertyEncoding::U8 => {
+                            data.iter().map(|&b| b as u32).collect::<Vec<u32>>()
+                        },
+                        RadChunkPropertyEncoding::U16 => decode_u16_as_u32(data, 1, self.count),
+                        RadChunkPropertyEncoding::U32 => decode_u32(data, 1, self.count),
+                        _ => return Err(anyhow::anyhow!("Unsupported label encoding: {:?}", prop.encoding)),
+                    };
+                    match prop.property {
+                        RadChunkPropertyName::Label => self.splats.set_label(self.base, self.count, &values),
+                        RadChunkPropertyName::InstanceLabel => self.splats.set_instance_label(self.base, self.count, &values),
+                        _ => unreachable!(),
+                    }
                 },
                 // _ => return Err(anyhow::anyhow!("Unknown property type: {:?}", prop.property)),
             }

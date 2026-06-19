@@ -231,7 +231,9 @@ fn decode_v2<T: SplatReceiver>(
     decode_sh0_v2(&meta.sh0.codebook, &sh0_img, &mut rgb, &mut opacity)?;
 
     let mut labels = vec![0.0f32; num_splats * 4];
+    let mut label_info: Option<HashMap<std::string::String, f64>> = None;
     if let Some(meta_labels) = meta.labels {
+        label_info = Some(meta_labels.info);
         let labels_img = decode_rgba(&get_file(&meta_labels.files[0])?).context("decode labels")?;
         decode_labels(&labels_img, &mut labels)?;
     }
@@ -256,10 +258,11 @@ fn decode_v2<T: SplatReceiver>(
         &quat,
         &rgb,
         &opacity,
-        &labels,
+        &sh1,
         &sh2,
         &sh3,
-        &labels
+        &labels,
+        label_info
     )
 }
 
@@ -314,7 +317,9 @@ fn decode_v1<T: SplatReceiver>(
     decode_sh0_v1(&meta.sh0.mins, &meta.sh0.maxs, &sh0_img, &mut rgb, &mut opacity)?;
 
     let mut labels = vec![0.0f32; num_splats * 4];
+    let mut label_info: Option<HashMap<std::string::String, f64>> = None;
     if let Some(meta_labels) = meta.labels {
+        label_info = Some(meta_labels.info);
         let labels_img = decode_rgba(&get_file(&meta_labels.files[0])?).context("decode labels")?;
         decode_labels(&labels_img, &mut labels)?;
     }
@@ -343,7 +348,8 @@ fn decode_v1<T: SplatReceiver>(
         &sh1,
         &sh2,
         &sh3,
-        &labels
+        &labels,
+        label_info
     )
 }
 
@@ -584,6 +590,7 @@ fn emit_to_receiver<T: SplatReceiver>(
     sh2: &[f32],
     sh3: &[f32],
     labels: &[f32],
+    label_info: Option<HashMap<std::string::String, f64>>
 ) -> anyhow::Result<()> {
     let mut base = 0usize;
     while base < num_splats {
@@ -600,6 +607,7 @@ fn emit_to_receiver<T: SplatReceiver>(
                 scale: &scale[i3..i3 + count * 3],
                 quat: &quat[i4..i4 + count * 4],
                 labels: &labels[i4..i4 + count * 4],
+                label_info: label_info.clone(),
                 sh1: if max_sh_degree >= 1 { &sh1[base * 9..base * 9 + count * 9] } else { &[] },
                 sh2: if max_sh_degree >= 2 { &sh2[base * 15..base * 15 + count * 15] } else { &[] },
                 sh3: if max_sh_degree >= 3 { &sh3[base * 21..base * 21 + count * 21] } else { &[] },

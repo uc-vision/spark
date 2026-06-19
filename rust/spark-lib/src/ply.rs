@@ -189,6 +189,11 @@ impl<T: SplatReceiver> PlyDecoder<T> {
                     state.out_quat[i4 + d] = quat[d] / quat_magnitude;
                 }
 
+                if let Some(label) = state.label {
+                    state.out_labels[i4 + 0] = label[0].get_f32(&self.buffer, base);
+                    state.out_labels[i4 + 1] = label[1].get_f32(&self.buffer, base);
+                }
+
                 if let Some(sh1) = state.sh1 {
                     let i9 = i * 9;
                     for d in 0..9 {
@@ -215,6 +220,7 @@ impl<T: SplatReceiver> PlyDecoder<T> {
                 rgb: &state.out_rgb[..count * 3],
                 scale: &state.out_scale[..count * 3],
                 quat: &state.out_quat[..count * 4],
+                labels: &state.out_labels[..count * 4],
                 sh1: &state.out_sh1[..(if state.max_sh_degree >= 1 { count * 9 } else { 0 })],
                 sh2: &state.out_sh2[..(if state.max_sh_degree >= 2 { count * 15 } else { 0 })],
                 sh3: &state.out_sh3[..(if state.max_sh_degree >= 3 { count * 21 } else { 0 })],
@@ -895,6 +901,9 @@ struct PlyDecoderState {
     op_logi: PlyProperty,
     f_dc: [PlyProperty; 3],
     max_sh_degree: usize,
+
+    label: Option<[PlyProperty; 2]>,
+
     sh1: Option<[PlyProperty; 9]>,
     sh2: Option<[PlyProperty; 15]>,
     sh3: Option<[PlyProperty; 21]>,
@@ -907,6 +916,7 @@ struct PlyDecoderState {
     out_sh1: Vec<f32>,
     out_sh2: Vec<f32>,
     out_sh3: Vec<f32>,
+    out_labels: Vec<f32>
 }
 
 impl PlyDecoderState {
@@ -933,6 +943,15 @@ impl PlyDecoderState {
             *properties.get("f_dc_1").ok_or(anyhow!("Missing f_dc_1 property"))?,
             *properties.get("f_dc_2").ok_or(anyhow!("Missing f_dc_2 property"))?,
         ];
+
+        let label = if properties.get("label").is_some() {
+            Some([
+                *properties.get("label").ok_or(anyhow!("??? Missing label field"))?, 
+                *properties.get("instance_label").ok_or(anyhow!("??? Missing instance_label property"))?,
+            ])
+        } else {
+            None
+        };
 
         let mut num_f_rest = 0;
         while properties.contains_key(&format!("f_rest_{}", num_f_rest)) {
@@ -985,6 +1004,7 @@ impl PlyDecoderState {
             op_logi,
             f_dc,
             max_sh_degree,
+            label,
             sh1,
             sh2,
             sh3,
@@ -996,6 +1016,7 @@ impl PlyDecoderState {
             out_sh1: Vec::new(),
             out_sh2: Vec::new(),
             out_sh3: Vec::new(),
+            out_labels: Vec::new()
         })
     }
 
@@ -1014,6 +1035,9 @@ impl PlyDecoderState {
         }
         if self.out_quat.len() < (count * 4) {
             self.out_quat.resize(count * 4, 0.0);
+        }
+        if self.out_labels.len() < (count * 4) {
+            self.out_labels.resize(count * 4, 0.0);
         }
         if self.max_sh_degree >= 1 && self.out_sh1.len() < (count * 9) {
             self.out_sh1.resize(count * 9, 0.0);
