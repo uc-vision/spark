@@ -86,6 +86,7 @@ export declare class DynoExtSplats extends DynoUniform<typeof TExtSplats, "extSp
 export declare const defineEvaluateExtSH1: string;
 export declare const defineEvaluateExtSH12: string;
 export declare const defineEvaluateExtSH3: string;
+export declare const randomColourFromID: string;
 export declare function evaluateExtSH({ coord, viewDir, numSh, sh1Texture, sh2Texture, sh3TextureA, sh3TextureB, }: {
     coord: DynoVal<"ivec3">;
     viewDir: DynoVal<"vec3">;

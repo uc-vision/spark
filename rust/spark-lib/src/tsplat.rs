@@ -10,6 +10,8 @@ pub trait Tsplat: std::fmt::Debug {
     fn rgb(&self) -> Vec3A;
     fn scales(&self) -> Vec3A;
     fn quaternion(&self) -> Quat;
+    fn label(&self) -> u32;
+    fn instance_label(&self) -> u32;
 
     fn max_scale(&self) -> f32 { self.scales().max_element() }
     
@@ -56,6 +58,8 @@ pub trait TsplatMut: Tsplat {
     fn set_rgb(&mut self, rgb: Vec3A);
     fn set_scales(&mut self, scales: Vec3A);
     fn set_quaternion(&mut self, quaternion: Quat);
+    fn set_label(&mut self, label: u32);
+    fn set_instance_label(&mut self, instance: u32);
 }
 
 pub trait TsplatArray {
@@ -192,6 +196,12 @@ pub fn bhattacharyya_coeff(a: &impl Tsplat, b: &impl Tsplat) -> f32 {
 
 pub fn similarity_metric(a: &impl Tsplat, b: &impl Tsplat) -> f32 {
     let spatial = bhattacharyya_coeff(a, b);
+    if a.label() != a.label() {
+        return 0.0
+    }
+    if a.label() == b.label() && a.instance_label() != b.instance_label() {
+        return 0.0
+    }
 
     let color_a = a.rgb();
     let color_b = b.rgb();

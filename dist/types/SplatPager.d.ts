@@ -86,13 +86,22 @@ export interface SplatPagerOptions {
      */
     numFetchers?: number;
 }
+interface PageUpload {
+    page: number;
+    numSplats: number;
+    packedArray: Uint32Array;
+    extArray?: Uint32Array;
+    shArrays: Array<Uint32Array>;
+    labels?: Uint32Array;
+    instances?: Uint32Array;
+}
 export declare class SplatPager {
-    renderer: THREE.WebGLRenderer;
-    extSplats: boolean;
-    maxPages: number;
-    maxSplats: number;
-    pageSplats: number;
-    maxSh: number;
+    readonly renderer: THREE.WebGLRenderer;
+    readonly extSplats: boolean;
+    readonly maxPages: number;
+    readonly maxSplats: number;
+    readonly pageSplats: number;
+    readonly maxSh: number;
     curSh: number;
     autoDrive: boolean;
     numFetchers: number;
@@ -112,20 +121,8 @@ export declare class SplatPager {
         lru: number;
     }>;
     freeablePages: number[];
-    newUploads: {
-        page: number;
-        numSplats: number;
-        packedArray: Uint32Array;
-        extArray?: Uint32Array;
-        extra: Record<string, unknown>;
-    }[];
-    readyUploads: {
-        page: number;
-        numSplats: number;
-        packedArray: Uint32Array;
-        extArray?: Uint32Array;
-        extra: Record<string, unknown>;
-    }[];
+    newUploads: PageUpload[];
+    readyUploads: PageUpload[];
     lodTreeUpdates: {
         splats: PagedSplats;
         page: number;
@@ -149,10 +146,25 @@ export declare class SplatPager {
     }[];
     packedTexture: dyno.DynoUsampler2DArray<"packedTexture", THREE.DataArrayTexture>;
     extTexture: dyno.DynoUsampler2DArray<"extTexture", THREE.DataArrayTexture>;
-    sh1Texture: dyno.DynoUsampler2DArray<"sh1", THREE.DataArrayTexture>;
-    sh2Texture: dyno.DynoUsampler2DArray<"sh2", THREE.DataArrayTexture>;
-    sh3Texture: dyno.DynoUsampler2DArray<"sh3", THREE.DataArrayTexture>;
-    sh3TextureB: dyno.DynoUsampler2DArray<"sh3b", THREE.DataArrayTexture>;
+    highlightLabel: dyno.DynoInt<"highlightLabel">;
+    lookUpTexture: dyno.DynoUsampler2D<'lookup', THREE.DataTexture>;
+    labelTexture: dyno.DynoUsampler2DArray<"label", THREE.DataArrayTexture>;
+    instanceTexture: dyno.DynoUsampler2DArray<"instance", THREE.DataArrayTexture>;
+    labelLookupModifier: dyno.Dyno<{
+        gsplat: typeof dyno.Gsplat;
+        lookup: 'usampler2D';
+        label: 'usampler2DArray';
+        instance: 'usampler2DArray';
+        highlightLabel: 'int';
+    }, {
+        gsplat: typeof dyno.Gsplat;
+    }>;
+    readonly shTextures: [
+        dyno.DynoUsampler2DArray<"sh1", THREE.DataArrayTexture>,
+        dyno.DynoUsampler2DArray<"sh2", THREE.DataArrayTexture>,
+        dyno.DynoUsampler2DArray<"sh3", THREE.DataArrayTexture>,
+        dyno.DynoUsampler2DArray<"sh3b", THREE.DataArrayTexture>
+    ];
     readIndex: dyno.DynoBlock<{
         index: "int";
         numSplats: "int";
@@ -191,9 +203,13 @@ export declare class SplatPager {
     }>;
     constructor(options: SplatPagerOptions);
     dispose(): void;
+    updateLabelLookup(categories: Set<number>): void;
+    private newUintArrayTex;
+    private ensureLabelTextures;
+    updateLabelHighlight(id: number): void;
+    private ensureInstanceTextures;
     private ensureShTextures;
     private allocatePage;
-    private freePage;
     getSplatsChunk(splats: PagedSplats, chunk: number): {
         page: number;
         lru: number;
@@ -202,7 +218,6 @@ export declare class SplatPager {
     private removeSplatsChunkPage;
     removeSplats(splats: PagedSplats): void;
     private uploadPage;
-    private getGlTexture;
     private newUint32ArrayTexture;
     driveFetchers(): void;
     private allocateFreeable;
@@ -220,11 +235,8 @@ export declare class SplatPager {
     static emptyIndicesTexture: THREE.DataTexture;
     static emptyPackedTexture: THREE.DataArrayTexture;
     static emptyExtTexture: THREE.DataArrayTexture;
-    static emptySh1Texture: THREE.DataArrayTexture;
-    static emptySh2Texture: THREE.DataArrayTexture;
-    static emptySh3Texture: THREE.DataArrayTexture;
-    static emptyExtSh1Texture: THREE.DataArrayTexture;
-    static emptyExtSh2Texture: THREE.DataArrayTexture;
-    static emptyExtSh3Texture: THREE.DataArrayTexture;
-    static emptyExtSh3BTexture: THREE.DataArrayTexture;
+    static emptyLabelTexture: THREE.DataArrayTexture;
+    static emptyShTextures: readonly [THREE.DataArrayTexture, THREE.DataArrayTexture, THREE.DataArrayTexture];
+    static emptyExtShTextures: readonly [THREE.DataArrayTexture, THREE.DataArrayTexture, THREE.DataArrayTexture, THREE.DataArrayTexture];
 }
+export {};

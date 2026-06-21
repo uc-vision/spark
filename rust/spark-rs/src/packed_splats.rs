@@ -827,6 +827,14 @@ impl SplatGetter for PackedSplatsData {
         }
     }
 
+    fn get_label(&mut self, base: usize, count: usize, out: &mut [u32]) {
+        todo!(); 
+    }
+
+    fn get_instance_label(&mut self, base: usize, count: usize, out: &mut [u32]) {
+        todo!(); 
+    }
+
     fn get_center(&mut self, base: usize, count: usize, out: &mut [f32]) {
         if count == 0 { return; }
         self.prepare_buffer(base, count);

@@ -430,6 +430,7 @@ export class SplatMesh extends SplatGenerator {
       });
     } else {
       this.isInitialized = true;
+      
       this.initialized = Promise.resolve(this);
       if (options.onLoad) {
         const maybePromise = options.onLoad(this);
@@ -441,6 +442,18 @@ export class SplatMesh extends SplatGenerator {
     }
 
     // this.add(createRendererDetectionMesh());
+  }
+
+  public updateLabelLookup(categories: Set<number>) {
+    if (this.paged) {
+      this.paged.pager?.updateLabelLookup(categories);
+    }
+  }
+
+  public updateLabelHighlight(id: number) {
+    if (this.paged) {
+      this.paged.pager?.updateLabelHighlight(id);
+    }
   }
 
   async asyncInitialize(options: SplatMeshOptions) {
@@ -503,7 +516,7 @@ export class SplatMesh extends SplatGenerator {
         this.splats = this.extSplats;
       }
     }
-
+    
     if (this.splats) {
       this.numSplats = this.splats.getNumSplats();
       this.updateGenerator();
@@ -714,6 +727,10 @@ export class SplatMesh extends SplatGenerator {
           for (const modifier of this.worldModifiers) {
             gsplat = modifier.apply({ gsplat }).gsplat;
           }
+        }
+
+        if (this.paged?.pager?.labelLookupModifier) {
+          gsplat = this.paged?.pager?.labelLookupModifier.apply({ gsplat }).gsplat;
         }
 
         // We're done! Output resulting Gsplat
