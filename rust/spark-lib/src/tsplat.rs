@@ -10,8 +10,8 @@ pub trait Tsplat: std::fmt::Debug {
     fn rgb(&self) -> Vec3A;
     fn scales(&self) -> Vec3A;
     fn quaternion(&self) -> Quat;
-    fn label(&self) -> f32;
-    fn instance_label(&self) -> f32;
+    fn label(&self) -> u32;
+    fn instance_label(&self) -> u32;
 
     fn max_scale(&self) -> f32 { self.scales().max_element() }
     
@@ -58,8 +58,8 @@ pub trait TsplatMut: Tsplat {
     fn set_rgb(&mut self, rgb: Vec3A);
     fn set_scales(&mut self, scales: Vec3A);
     fn set_quaternion(&mut self, quaternion: Quat);
-    fn set_label(&mut self, opacity: f32);
-    fn set_instance_label(&mut self, opacity: f32);
+    fn set_label(&mut self, label: u32);
+    fn set_instance_label(&mut self, instance: u32);
 }
 
 pub trait TsplatArray {

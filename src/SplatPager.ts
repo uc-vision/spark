@@ -2,7 +2,7 @@ import * as THREE from "three";
 
 import { decode_rad_header } from "spark-rs";
 import { LN_SCALE_MAX, LN_SCALE_MIN, dyno } from ".";
-import { evaluateExtSH } from "./ExtSplats";
+import { evaluateExtSH, randomColourFromID } from "./ExtSplats";
 import { evaluatePackedSH } from "./PackedSplats";
 import { getSplatFileType, getSplatFileTypeFromPath } from "./SplatLoader";
 import type { SplatSource } from "./SplatMesh";
@@ -570,6 +570,22 @@ export class SplatPager {
   >;
   extTexture: dyno.DynoUsampler2DArray<"extTexture", THREE.DataArrayTexture>;
 
+  highlightLabel: dyno.DynoInt<"highlightLabel">;
+  lookUpTexture: dyno.DynoUsampler2D<'lookup', THREE.DataTexture>;
+  labelTexture: dyno.DynoUsampler2DArray<"label", THREE.DataArrayTexture>;
+  instanceTexture: dyno.DynoUsampler2DArray<"instance", THREE.DataArrayTexture>;
+  labelLookupModifier: dyno.Dyno<
+  {
+    gsplat: typeof dyno.Gsplat, 
+    lookup: 'usampler2D', 
+    label: 'usampler2DArray', 
+    instance: 'usampler2DArray', 
+    highlightLabel: 'int'
+  },
+  { gsplat: typeof dyno.Gsplat }
+  >
+
+
   sh1Texture: dyno.DynoUsampler2DArray<"sh1", THREE.DataArrayTexture>;
   sh2Texture: dyno.DynoUsampler2DArray<"sh2", THREE.DataArrayTexture>;
   sh3Texture: dyno.DynoUsampler2DArray<"sh3", THREE.DataArrayTexture>;
@@ -655,6 +671,7 @@ export class SplatPager {
           )
         : SplatPager.emptyExtTexture,
     });
+
     this.sh1Texture = new dyno.DynoUsampler2DArray({
       value: this.extSplats
         ? SplatPager.emptyExtSh1Texture
@@ -673,6 +690,65 @@ export class SplatPager {
     this.sh3TextureB = new dyno.DynoUsampler2DArray({
       value: SplatPager.emptyExtSh3BTexture,
     });
+
+    this.highlightLabel = new dyno.DynoInt({ key: 'highlightLabel', value: -1 }); 
+    this.lookUpTexture = new dyno.DynoUsampler2D({
+      value: new THREE.DataTexture(
+        new Uint32Array(256), 
+        256, 1,
+        THREE.RedIntegerFormat,
+        THREE.UnsignedIntType,
+      )
+    });
+    this.lookUpTexture.value.image.data.fill(1);
+    this.lookUpTexture.value.needsUpdate = true;
+    this.renderer.initTexture(this.lookUpTexture.value);
+
+    this.labelTexture = new dyno.DynoUsampler2DArray({
+      value: SplatPager.emptyLabelTexture
+    });
+
+    this.instanceTexture = new dyno.DynoUsampler2DArray({
+      value: SplatPager.emptyLabelTexture
+    });
+
+    this.labelLookupModifier = new dyno.Dyno({
+        inTypes:  { 
+          gsplat: dyno.Gsplat, 
+          lookup: 'usampler2D', 
+          label: 'usampler2DArray',
+          instance: 'usampler2DArray',
+          highlightLabel: 'int'
+        },
+        outTypes: { gsplat: dyno.Gsplat },
+        inputs: { 
+          lookup: this.lookUpTexture, 
+          label: this.labelTexture,
+          instance: this.instanceTexture,
+          highlightLabel: this.highlightLabel
+        },
+        globals: () => [
+          randomColourFromID,
+          dyno.defineGsplat],
+        statements: ({ inputs, outputs }) => 
+          dyno.unindentLines(`
+          Gsplat g = ${inputs.gsplat};
+      
+          ivec3 splatCoord = ivec3(g.index & 255, (g.index >> 8) & 255, g.index >> 16);
+          uvec4  labelTexel = texelFetch(${inputs.label}, splatCoord, 0);
+          uint visible = texelFetch(${inputs.lookup}, ivec2(labelTexel.r, 0), 0).r;
+          if (visible == 0u) { g.flags &= ~GSPLAT_FLAG_ACTIVE; }
+
+          if (${inputs.highlightLabel} >= 0 && labelTexel.r == uint(${inputs.highlightLabel})) {
+            uvec4 instanceTexel = texelFetch(${inputs.instance}, splatCoord, 0);
+            vec4 splatColour = getDeterministicColor(instanceTexel.r);
+            g.rgba = mix(g.rgba, splatColour, 0.6);
+          }
+
+          ${outputs.gsplat} = g;
+        `), 
+      }); //DynoUniform
+
 
     this.readIndex = dyno.dynoBlock(
       { index: "int", numSplats: "int", indices: "usampler2D" },
@@ -891,6 +967,14 @@ export class SplatPager {
         this.sh3Texture.value.source.data = null;
       }
     } else {
+      if (this.labelTexture.value !== SplatPager.emptyLabelTexture) {
+        this.labelTexture.value.dispose();
+        this.labelTexture.value.source.data = null;
+      }
+      if (this.instanceTexture.value !== SplatPager.emptyLabelTexture) {
+        this.instanceTexture.value.dispose();
+        this.instanceTexture.value.source.data = null;
+      }
       if (this.sh1Texture.value !== SplatPager.emptyExtSh1Texture) {
         this.sh1Texture.value.dispose();
         this.sh1Texture.value.source.data = null;
@@ -909,6 +993,49 @@ export class SplatPager {
       }
     }
   }
+
+
+  public updateLabelLookup(categories: Set<number>) {
+    const array = this.lookUpTexture.value.image.data;
+    array.fill(0);
+    categories.forEach(id => {
+      if (id >= 0 && id < 256) array[id] = 1;
+    });
+    this.lookUpTexture.value.needsUpdate = true;
+  }
+
+  private ensureLabelTextures() {
+    if (this.labelTexture.value === SplatPager.emptyLabelTexture) {
+      this.labelTexture.value = this.newUint32ArrayTexture(
+        new Uint32Array(this.maxPages * 256 * 256 * 1),
+        256,
+        256,
+        this.maxPages,
+        THREE.RedIntegerFormat,
+        THREE.UnsignedIntType,
+        "R32UI",
+      );
+    }
+  }
+
+  public updateLabelHighlight(id: number) {
+    this.highlightLabel.value = id
+  }
+
+  private ensureInstanceTextures() {
+    if (this.instanceTexture.value === SplatPager.emptyLabelTexture) {
+      this.instanceTexture.value = this.newUint32ArrayTexture(
+        new Uint32Array(this.maxPages * 256 * 256 * 1),
+        256,
+        256,
+        this.maxPages,
+        THREE.RedIntegerFormat,
+        THREE.UnsignedIntType,
+        "R32UI",
+      );
+    }
+  }
+
 
   private ensureShTextures(numSh: number) {
     this.curSh = Math.max(this.curSh, numSh);
@@ -1165,6 +1292,24 @@ export class SplatPager {
             : 0;
     this.ensureShTextures(numSh);
 
+    if ( extra.labels !== undefined ) {
+      this.ensureLabelTextures();
+      const labels = extra.labels as Uint32Array<ArrayBuffer>;
+      const array = this.labelTexture.value.image.data;
+      array.subarray(pageBase, pageBase + labels.length).set(labels);
+      this.labelTexture.value.addLayerUpdate(page);
+      this.labelTexture.value.needsUpdate = true;
+    }
+
+    if ( extra.instances !== undefined ) {
+      this.ensureInstanceTextures();
+      const instances = extra.instances as Uint32Array<ArrayBuffer>;
+      const array = this.instanceTexture.value.image.data;
+      array.subarray(pageBase, pageBase + instances.length).set(instances);
+      this.instanceTexture.value.addLayerUpdate(page);
+      this.instanceTexture.value.needsUpdate = true;
+    }
+  
     if (!this.extSplats) {
       if (this.sh1Texture.value !== SplatPager.emptySh1Texture && extra.sh1) {
         // this.renderer.state.bindTexture(
@@ -1515,6 +1660,7 @@ export class SplatPager {
 
   static emptyPackedTexture = this.emptyUint32x4;
   static emptyExtTexture = this.emptyUint32x4;
+  static emptyLabelTexture = this.emptyUint32x4;
   static emptySh1Texture = this.emptyUint32x2;
   static emptySh2Texture = this.emptyUint32x4;
   static emptySh3Texture = this.emptyUint32x4;

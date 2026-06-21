@@ -25,6 +25,7 @@ mod lod_tree;
 #[wasm_bindgen(start)]
 pub fn wasm_start() {
     console_error_panic_hook::set_once();
+    console_log::init_with_level(log::Level::Debug).expect("error initializing log");
 }
 
 #[wasm_bindgen]
@@ -136,6 +137,7 @@ pub fn decode_to_extsplats(
     file_type: Option<String>, path_name: Option<String>,
     sh1_codes: Option<Uint32Array>, sh2_codes: Option<Uint32Array>, sh3_codes: Option<Array>,
 ) -> Result<ChunkDecoder, JsValue> {
+    
     let file_type = if let Some(file_type) = file_type {
         match SplatFileType::from_enum_str(&file_type) {
             Ok(file_type) => Some(file_type),
@@ -147,6 +149,7 @@ pub fn decode_to_extsplats(
 
     let mut splats = ExtSplatsData::new();
     splats.set_sh_codes(sh1_codes, sh2_codes, sh3_codes);
+
 
     let decoder = MultiDecoder::new(splats, file_type, path_name.as_deref());
     let on_finish = |receiver: Box<dyn ChunkReceiver>| {

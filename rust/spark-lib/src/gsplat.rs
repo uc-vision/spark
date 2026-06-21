@@ -19,20 +19,20 @@ pub struct Gsplat {
     pub rgb: [f16; 3],
     pub ln_scales: [f16; 3],
     pub quaternion: [f16; 4],
-    pub label: u16,
-    pub instance_label: u16,
+    pub label: u32,
+    pub instance_label: u32,
 }
 
 impl Gsplat {
-    pub fn new(center: Vec3A, opacity: f32, rgb: Vec3A, scales: Vec3A, quaternion: Quat, label: f32, instance_label: f32) -> Self {
+    pub fn new(center: Vec3A, opacity: f32, rgb: Vec3A, scales: Vec3A, quaternion: Quat, label: u32, instance_label: u32) -> Self {
         Self {
             center: center.to_vec3(),
             opacity: f16::from_f32(opacity),
             rgb: rgb.to_array().map(|v| f16::from_f32(v)),
             ln_scales: scales.to_array().map(|v| f16::from_f32(v.ln())),
             quaternion: quaternion.to_array().map(|v| f16::from_f32(v)),
-            label: label as u16,
-            instance_label: instance_label as u16
+            label: label,
+            instance_label: instance_label
         }
     }
 }
@@ -68,12 +68,12 @@ impl<'a> Tsplat for &'a Gsplat {
         self.ln_scales[0].max(self.ln_scales[1]).max(self.ln_scales[2]).to_f32().exp()
     }
 
-    fn label(&self) -> f32 {
-        self.label as f32
+    fn label(&self) -> u32 {
+        self.label
     }
 
-    fn instance_label(&self) -> f32 {
-        self.instance_label as f32
+    fn instance_label(&self) -> u32 {
+        self.instance_label
     }
 
 }
@@ -103,12 +103,12 @@ impl<'a> Tsplat for &'a mut Gsplat {
         self.ln_scales[0].max(self.ln_scales[1]).max(self.ln_scales[2]).to_f32().exp()
     }
 
-    fn label(&self) -> f32 {
-        self.label as f32
+    fn label(&self) -> u32 {
+        self.label
     }
 
-    fn instance_label(&self) -> f32 {
-        self.instance_label as f32
+    fn instance_label(&self) -> u32 {
+        self.instance_label
     }
 }
 
@@ -136,12 +136,12 @@ impl<'a> TsplatMut for &'a mut Gsplat {
         self.quaternion = quaternion.to_array().map(|v| f16::from_f32(v));
     }
 
-    fn set_label(&mut self, label: f32) {
-        self.label = label as u16;
+    fn set_label(&mut self, label: u32) {
+        self.label = label;
     }
 
-    fn set_instance_label(&mut self, instance_label: f32) {
-        self.instance_label = instance_label as u16;
+    fn set_instance_label(&mut self, instance_label: u32) {
+        self.instance_label = instance_label;
     }
 
 }
@@ -403,12 +403,12 @@ impl TsplatArray for GsplatArray {
             (scales, opacity)
         };
 
-        let mut label: f32 = 0.0;
-        let mut instance_label: f32 = 0.0;
+        let mut label: u32 = 0;
+        let mut instance_label: u32 = 0;
         if let Some(first_index) = indices.get(0).copied(){
             let first_splat = &self.splats[first_index];
-            label = (*first_splat).label as f32;
-            instance_label = (*first_splat).instance_label as f32;
+            label = (*first_splat).label as u32;
+            instance_label = (*first_splat).instance_label as u32;
         }
         
         
@@ -788,8 +788,8 @@ impl SplatReceiver for GsplatArray {
             splat.set_rgb(Vec3A::from_slice(&batch.rgb[i3..i3 + 3]));
             splat.set_scales(Vec3A::from_slice(&batch.scale[i3..i3 + 3]));
             splat.set_quaternion(Quat::from_slice(&batch.quat[i4..i4 + 4]));
-            splat.set_label(batch.labels[i4] as f32);
-            splat.set_instance_label(batch.labels[i4 + 1] as f32);
+            splat.set_label(batch.labels[i]);
+            splat.set_instance_label(batch.instances[i]);
         }
 
         self.set_sh(base, count, batch.sh1, batch.sh2, batch.sh3);

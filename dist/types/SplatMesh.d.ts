@@ -140,6 +140,8 @@ export declare class SplatMesh extends SplatGenerator {
     showLodPage?: number;
     showLodPageDyno: DynoInt<string>;
     constructor(options?: SplatMeshOptions);
+    updateLabelLookup(categories: Set<number>): void;
+    updateLabelHighlight(id: number): void;
     asyncInitialize(options: SplatMeshOptions): Promise<void>;
     static dynoTime: DynoFloat<"value">;
     pushSplat(center: THREE.Vector3, scales: THREE.Vector3, quaternion: THREE.Quaternion, opacity: number, color: THREE.Color): void;

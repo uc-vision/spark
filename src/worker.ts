@@ -194,6 +194,7 @@ async function decodeBytesUrl({
       if (nextChunk.length === 0) {
         break;
       }
+     
 
       decoder.push(nextChunk);
       loaded += nextChunk.length;
@@ -378,7 +379,7 @@ type DecodedExtResult = {
   ext0: Uint32Array;
   ext1: Uint32Array;
   labels?: Uint32Array;
-  label_info?: Record<string, number>,
+  instances?: Uint32Array;
   sh1?: Uint32Array;
   sh2?: Uint32Array;
   sh3a?: Uint32Array;
@@ -395,7 +396,7 @@ function toExtResult(packed: DecodedExtResult): ExtResult {
     extArrays: [packed.ext0, packed.ext1],
     extra: {
       labels: packed.labels,
-      label_info: packed.label_info,
+      instances: packed.instances,
       sh1: packed.sh1,
       sh2: packed.sh2,
       sh3a: packed.sh3a,
@@ -448,7 +449,7 @@ async function loadExtSplats(
     sendStatus: (data: unknown) => void;
   },
 ) {
-  // console.log("loadExtSplats", { url, requestHeader, withCredentials, fileBytes, fileType, pathName, stream, streamLength, lod, lodBase, lodAbove, nonLod });
+  // console.log("loadExtSplats", { url, requestHeader, withCredentials, fileBytes, fileType, pathName, lod, lodBase, lodAbove, nonLod });
   if (!lod) {
     const decoder = decode_to_extsplats(
       fileType,
@@ -468,7 +469,6 @@ async function loadExtSplats(
       sendStatus,
     });
     const result = toExtResult(decoded as DecodedExtResult);
-    console.log(result)
 
     if (result.extra.lodTree) {
       return { lodSplats: result };

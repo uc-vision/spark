@@ -190,8 +190,8 @@ impl<T: SplatReceiver> PlyDecoder<T> {
                 }
 
                 if let Some(label) = state.label {
-                    state.out_labels[i4 + 0] = label[0].get_f32(&self.buffer, base);
-                    state.out_labels[i4 + 1] = label[1].get_f32(&self.buffer, base);
+                    state.out_labels[i] = label[0].get_u32(&self.buffer, base);
+                    state.out_instances[i] = label[1].get_u32(&self.buffer, base) + (1 as u32);
                 }
 
                 if let Some(sh1) = state.sh1 {
@@ -220,7 +220,8 @@ impl<T: SplatReceiver> PlyDecoder<T> {
                 rgb: &state.out_rgb[..count * 3],
                 scale: &state.out_scale[..count * 3],
                 quat: &state.out_quat[..count * 4],
-                labels: &state.out_labels[..count * 4],
+                labels: &state.out_labels[..count],
+                instances: &state.out_instances[..count],
                 sh1: &state.out_sh1[..(if state.max_sh_degree >= 1 { count * 9 } else { 0 })],
                 sh2: &state.out_sh2[..(if state.max_sh_degree >= 2 { count * 15 } else { 0 })],
                 sh3: &state.out_sh3[..(if state.max_sh_degree >= 3 { count * 21 } else { 0 })],
@@ -916,7 +917,8 @@ struct PlyDecoderState {
     out_sh1: Vec<f32>,
     out_sh2: Vec<f32>,
     out_sh3: Vec<f32>,
-    out_labels: Vec<f32>
+    out_labels: Vec<u32>,
+    out_instances: Vec<u32>
 }
 
 impl PlyDecoderState {
@@ -1016,7 +1018,8 @@ impl PlyDecoderState {
             out_sh1: Vec::new(),
             out_sh2: Vec::new(),
             out_sh3: Vec::new(),
-            out_labels: Vec::new()
+            out_labels: Vec::new(),
+            out_instances: Vec::new()
         })
     }
 
@@ -1036,8 +1039,11 @@ impl PlyDecoderState {
         if self.out_quat.len() < (count * 4) {
             self.out_quat.resize(count * 4, 0.0);
         }
-        if self.out_labels.len() < (count * 4) {
-            self.out_labels.resize(count * 4, 0.0);
+        if self.out_labels.len() < (count) {
+            self.out_labels.resize(count, 0);
+        }
+        if self.out_instances.len() < (count) {
+            self.out_instances.resize(count, 0);
         }
         if self.max_sh_degree >= 1 && self.out_sh1.len() < (count * 9) {
             self.out_sh1.resize(count * 9, 0.0);

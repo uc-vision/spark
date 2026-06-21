@@ -71,7 +71,7 @@ export type PackedResult = {
 };
 export type ExtExtra = {
     labels?: Uint32Array;
-    label_info?: Record<string, number>;
+    instances?: Uint32Array;
     sh1?: Uint32Array;
     sh2?: Uint32Array;
     sh3a?: Uint32Array;
