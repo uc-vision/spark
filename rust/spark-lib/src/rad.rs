@@ -935,7 +935,10 @@ impl<T: SplatGetter> RadEncoder<T> {
 
     fn encode_chunk(
         &mut self, base: usize, count: usize, encoding: &SplatEncoding,
-        buffer: &mut Vec<f32>, buffer_u16: &mut Vec<u16>, buffer_usize: &mut Vec<usize>, buffer_u32: &mut Vec<u32>,
+        buffer: &mut Vec<f32>,
+        buffer_u16: &mut Vec<u16>,
+        buffer_usize: &mut Vec<usize>,
+        buffer_u32: &mut Vec<u32>,
     ) -> anyhow::Result<Vec<u8>> {
         let max_sh = self.getter.max_sh_degree().min(self.max_sh);
 
