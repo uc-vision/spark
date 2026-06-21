@@ -92,6 +92,8 @@ export type RadMeta = {
 };
 
 export type PackedExtra = {
+  labels?: Uint32Array;
+  instances?: Uint32Array;
   sh1?: Uint32Array;
   sh2?: Uint32Array;
   sh3?: Uint32Array;

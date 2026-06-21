@@ -3753,6 +3753,35 @@ class GunzipReader {
     return result;
   }
 }
+function uploadU32DataTextureRows(renderer, texture2, width, rows, data) {
+  const gl = renderer.getContext();
+  const props = renderer.properties.get(texture2);
+  const glTexture = props == null ? void 0 : props.__webglTexture;
+  if (!glTexture) {
+    throw new Error("texture not found");
+  }
+  const currentFlipY = gl.getParameter(gl.UNPACK_FLIP_Y_WEBGL);
+  const currentPremultiply = gl.getParameter(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL);
+  renderer.state.activeTexture(gl.TEXTURE0);
+  renderer.state.bindTexture(gl.TEXTURE_2D, glTexture);
+  gl.bindBuffer(gl.PIXEL_UNPACK_BUFFER, null);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+  gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+  gl.texSubImage2D(
+    gl.TEXTURE_2D,
+    0,
+    0,
+    0,
+    width,
+    rows,
+    gl.RGBA_INTEGER,
+    gl.UNSIGNED_INT,
+    data
+  );
+  renderer.state.unbindTexture();
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, currentFlipY);
+  gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, currentPremultiply);
+}
 const utils = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   DataCache,
@@ -3818,6 +3847,7 @@ const utils = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.definePropert
   toHalf,
   uintBitsToFloat: uintBitsToFloat$1,
   unpackSplat,
+  uploadU32DataTextureRows,
   withinCoinciDist,
   withinCoorientDist,
   withinDist
@@ -10966,6 +10996,9 @@ function readRgbaArray(rgba, index) {
   });
   return dyno2.outputs.rgba;
 }
+const PAGE_WIDTH = 256;
+const PAGE_HEIGHT = 256;
+const PAGE_SPLATS = PAGE_WIDTH * PAGE_HEIGHT;
 class PagedSplats {
   constructor(options) {
     var _a2;
@@ -11197,26 +11230,13 @@ class PagedSplats {
     } else {
       const textureIndices = indicesTexture.image.data;
       textureIndices.set(indices.subarray(0, numSplats));
-      const gl = renderer.getContext();
-      renderer.state.activeTexture(gl.TEXTURE0);
-      renderer.state.bindTexture(
-        gl.TEXTURE_2D,
-        getGlTexture(renderer, indicesTexture)
-      );
-      gl.bindBuffer(gl.PIXEL_UNPACK_BUFFER, null);
-      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-      gl.texSubImage2D(
-        gl.TEXTURE_2D,
-        0,
-        0,
-        0,
+      uploadU32DataTextureRows(
+        renderer,
+        indicesTexture,
         4096,
         rows,
-        gl.RGBA_INTEGER,
-        gl.UNSIGNED_INT,
-        indices
+        textureIndices
       );
-      renderer.state.bindTexture(gl.TEXTURE_2D, null);
     }
   }
   prepareFetchSplat() {
@@ -11312,10 +11332,10 @@ const _SplatPager = class _SplatPager {
     this.pageToSplatsChunk = [];
     this.renderer = options.renderer;
     this.extSplats = options.extSplats ?? false;
-    this.pageSplats = 65536;
+    this.pageSplats = PAGE_SPLATS;
     this.maxSplats = options.maxSplats ?? 16777216;
-    this.maxPages = Math.ceil(this.maxSplats / this.pageSplats);
-    this.maxSplats = this.maxPages * this.pageSplats;
+    this.maxPages = Math.ceil(this.maxSplats / PAGE_SPLATS);
+    this.maxSplats = this.maxPages * PAGE_SPLATS;
     this.maxSh = options.maxSh ?? 3;
     this.curSh = 0;
     this.autoDrive = options.autoDrive ?? true;
@@ -11332,39 +11352,17 @@ const _SplatPager = class _SplatPager {
     this.fetched = [];
     this.fetchPriority = [];
     this.packedTexture = new DynoUsampler2DArray({
-      value: this.newUint32ArrayTexture(
-        new Uint32Array(this.maxPages * 256 * 256 * 4),
-        256,
-        256,
-        this.maxPages,
-        THREE.RGBAIntegerFormat,
-        THREE.UnsignedIntType,
-        "RGBA32UI"
-      )
+      value: this.newUint32ArrayTexture(4)
     });
     this.extTexture = new DynoUsampler2DArray({
-      value: this.extSplats ? this.newUint32ArrayTexture(
-        new Uint32Array(this.maxPages * 256 * 256 * 4),
-        256,
-        256,
-        this.maxPages,
-        THREE.RGBAIntegerFormat,
-        THREE.UnsignedIntType,
-        "RGBA32UI"
-      ) : _SplatPager.emptyExtTexture
+      value: this.extSplats ? this.newUint32ArrayTexture(4) : _SplatPager.emptyExtTexture
     });
-    this.sh1Texture = new DynoUsampler2DArray({
-      value: this.extSplats ? _SplatPager.emptyExtSh1Texture : _SplatPager.emptySh1Texture
-    });
-    this.sh2Texture = new DynoUsampler2DArray({
-      value: this.extSplats ? _SplatPager.emptyExtSh2Texture : _SplatPager.emptySh2Texture
-    });
-    this.sh3Texture = new DynoUsampler2DArray({
-      value: this.extSplats ? _SplatPager.emptyExtSh3Texture : _SplatPager.emptySh3Texture
-    });
-    this.sh3TextureB = new DynoUsampler2DArray({
-      value: _SplatPager.emptyExtSh3BTexture
-    });
+    const emptyShTextures = this.extSplats ? _SplatPager.emptyExtShTextures : _SplatPager.emptyShTextures;
+    this.shTextures = emptyShTextures.map(
+      (texture2) => new DynoUsampler2DArray({
+        value: texture2
+      })
+    );
     this.highlightLabel = new DynoInt({ key: "highlightLabel", value: -1 });
     this.lookUpTexture = new DynoUsampler2D({
       value: new THREE.DataTexture(
@@ -11411,7 +11409,7 @@ const _SplatPager = class _SplatPager {
           uint visible = texelFetch(${inputs.lookup}, ivec2(labelTexel.r, 0), 0).r;
           if (visible == 0u) { g.flags &= ~GSPLAT_FLAG_ACTIVE; }
 
-          if (${inputs.highlightLabel} > 0 && labelTexel.r == uint(${inputs.highlightLabel})) {
+          if (${inputs.highlightLabel} >= 0 && labelTexel.r == uint(${inputs.highlightLabel})) {
             uvec4 instanceTexel = texelFetch(${inputs.instance}, splatCoord, 0);
             vec4 splatColour = getDeterministicColor(instanceTexel.r);
             g.rgba = mix(g.rgba, splatColour, 0.6);
@@ -11518,9 +11516,9 @@ const _SplatPager = class _SplatPager {
           coord: pagedSplatTexCoord(index),
           viewDir,
           numSh,
-          sh1Texture: this.sh1Texture,
-          sh2Texture: this.sh2Texture,
-          sh3Texture: this.sh3Texture,
+          sh1Texture: this.shTextures[0],
+          sh2Texture: this.shTextures[1],
+          sh3Texture: this.shTextures[2],
           shMax
         }).rgb;
         rgb = add(rgb, splitGsplat(gsplat).outputs.rgb);
@@ -11584,10 +11582,10 @@ const _SplatPager = class _SplatPager {
           coord: pagedSplatTexCoord(index),
           viewDir,
           numSh,
-          sh1Texture: this.sh1Texture,
-          sh2Texture: this.sh2Texture,
-          sh3TextureA: this.sh3Texture,
-          sh3TextureB: this.sh3TextureB
+          sh1Texture: this.shTextures[0],
+          sh2Texture: this.shTextures[1],
+          sh3TextureA: this.shTextures[2],
+          sh3TextureB: this.shTextures[3]
         }).rgb;
         rgb = add(rgb, splitGsplat(gsplat).outputs.rgb);
         gsplat = combineGsplat({ gsplat, rgb });
@@ -11604,43 +11602,20 @@ const _SplatPager = class _SplatPager {
       this.extTexture.value.dispose();
       this.extTexture.value.source.data = null;
     }
-    if (!this.extSplats) {
-      if (this.sh1Texture.value !== _SplatPager.emptySh1Texture) {
-        this.sh1Texture.value.dispose();
-        this.sh1Texture.value.source.data = null;
-      }
-      if (this.sh2Texture.value !== _SplatPager.emptySh2Texture) {
-        this.sh2Texture.value.dispose();
-        this.sh2Texture.value.source.data = null;
-      }
-      if (this.sh3Texture.value !== _SplatPager.emptySh3Texture) {
-        this.sh3Texture.value.dispose();
-        this.sh3Texture.value.source.data = null;
-      }
-    } else {
-      if (this.labelTexture.value !== _SplatPager.emptyLabelTexture) {
-        this.labelTexture.value.dispose();
-        this.labelTexture.value.source.data = null;
-      }
-      if (this.instanceTexture.value !== _SplatPager.emptyLabelTexture) {
-        this.instanceTexture.value.dispose();
-        this.instanceTexture.value.source.data = null;
-      }
-      if (this.sh1Texture.value !== _SplatPager.emptyExtSh1Texture) {
-        this.sh1Texture.value.dispose();
-        this.sh1Texture.value.source.data = null;
-      }
-      if (this.sh2Texture.value !== _SplatPager.emptyExtSh2Texture) {
-        this.sh2Texture.value.dispose();
-        this.sh2Texture.value.source.data = null;
-      }
-      if (this.sh3Texture.value !== _SplatPager.emptyExtSh3Texture) {
-        this.sh3Texture.value.dispose();
-        this.sh3Texture.value.source.data = null;
-      }
-      if (this.sh3TextureB.value !== _SplatPager.emptyExtSh3BTexture) {
-        this.sh3TextureB.value.dispose();
-        this.sh3TextureB.value.source.data = null;
+    if (this.labelTexture.value !== _SplatPager.emptyLabelTexture) {
+      this.labelTexture.value.dispose();
+      this.labelTexture.value.source.data = null;
+    }
+    if (this.instanceTexture.value !== _SplatPager.emptyLabelTexture) {
+      this.instanceTexture.value.dispose();
+      this.instanceTexture.value.source.data = null;
+    }
+    const emptyShTextures = this.extSplats ? _SplatPager.emptyExtShTextures : _SplatPager.emptyShTextures;
+    for (let i = 0; i < emptyShTextures.length; i++) {
+      const texture2 = this.shTextures[i].value;
+      if (texture2 !== emptyShTextures[i]) {
+        texture2.dispose();
+        texture2.source.data = null;
       }
     }
   }
@@ -11652,9 +11627,18 @@ const _SplatPager = class _SplatPager {
     });
     this.lookUpTexture.value.needsUpdate = true;
   }
+  newUintArrayTex(data, width, height, depth, format, type, internalFormat) {
+    const texture2 = new THREE.DataArrayTexture(data, width, height, depth);
+    texture2.format = format;
+    texture2.type = type;
+    texture2.internalFormat = internalFormat;
+    texture2.needsUpdate = true;
+    this.renderer.initTexture(texture2);
+    return texture2;
+  }
   ensureLabelTextures() {
     if (this.labelTexture.value === _SplatPager.emptyLabelTexture) {
-      this.labelTexture.value = this.newUint32ArrayTexture(
+      this.labelTexture.value = this.newUintArrayTex(
         new Uint32Array(this.maxPages * 256 * 256 * 1),
         256,
         256,
@@ -11670,7 +11654,7 @@ const _SplatPager = class _SplatPager {
   }
   ensureInstanceTextures() {
     if (this.instanceTexture.value === _SplatPager.emptyLabelTexture) {
-      this.instanceTexture.value = this.newUint32ArrayTexture(
+      this.instanceTexture.value = this.newUintArrayTex(
         new Uint32Array(this.maxPages * 256 * 256 * 1),
         256,
         256,
@@ -11683,86 +11667,16 @@ const _SplatPager = class _SplatPager {
   }
   ensureShTextures(numSh) {
     this.curSh = Math.max(this.curSh, numSh);
-    if (!this.extSplats) {
-      if (this.curSh >= 1 && this.sh1Texture.value === _SplatPager.emptySh1Texture) {
-        this.sh1Texture.value = this.newUint32ArrayTexture(
-          new Uint32Array(this.maxPages * 256 * 256 * 2),
-          256,
-          256,
-          this.maxPages,
-          THREE.RGIntegerFormat,
-          THREE.UnsignedIntType,
-          "RG32UI"
-        );
-      }
-    } else {
-      if (this.curSh >= 1 && this.sh1Texture.value === _SplatPager.emptyExtSh1Texture) {
-        this.sh1Texture.value = this.newUint32ArrayTexture(
-          new Uint32Array(this.maxPages * 256 * 256 * 4),
-          256,
-          256,
-          this.maxPages,
-          THREE.RGBAIntegerFormat,
-          THREE.UnsignedIntType,
-          "RGBA32UI"
-        );
-      }
-    }
-    if (this.curSh >= 2 && this.sh2Texture.value === (!this.extSplats ? _SplatPager.emptySh2Texture : _SplatPager.emptyExtSh2Texture)) {
-      this.sh2Texture.value = this.newUint32ArrayTexture(
-        new Uint32Array(this.maxPages * 256 * 256 * 4),
-        256,
-        256,
-        this.maxPages,
-        THREE.RGBAIntegerFormat,
-        THREE.UnsignedIntType,
-        "RGBA32UI"
-      );
-    }
-    if (!this.extSplats) {
-      if (this.curSh >= 3 && this.sh3Texture.value === _SplatPager.emptySh3Texture) {
-        this.sh3Texture.value = this.newUint32ArrayTexture(
-          new Uint32Array(this.maxPages * 256 * 256 * 4),
-          256,
-          256,
-          this.maxPages,
-          THREE.RGBAIntegerFormat,
-          THREE.UnsignedIntType,
-          "RGBA32UI"
-        );
-      }
-    } else {
-      if (this.curSh >= 3) {
-        if (this.sh3Texture.value === _SplatPager.emptyExtSh3Texture) {
-          this.sh3Texture.value = this.newUint32ArrayTexture(
-            new Uint32Array(this.maxPages * 256 * 256 * 4),
-            256,
-            256,
-            this.maxPages,
-            THREE.RGBAIntegerFormat,
-            THREE.UnsignedIntType,
-            "RGBA32UI"
-          );
-        }
-        if (this.sh3TextureB.value === _SplatPager.emptyExtSh3BTexture) {
-          this.sh3TextureB.value = this.newUint32ArrayTexture(
-            new Uint32Array(this.maxPages * 256 * 256 * 4),
-            256,
-            256,
-            this.maxPages,
-            THREE.RGBAIntegerFormat,
-            THREE.UnsignedIntType,
-            "RGBA32UI"
-          );
-        }
+    const emptyShTextures = this.extSplats ? _SplatPager.emptyExtShTextures : _SplatPager.emptyShTextures;
+    for (let i = 0; i < this.curSh; i++) {
+      if (this.shTextures[i].value === emptyShTextures[i]) {
+        const elementsPerSplat = this.shTextures[i].value === _SplatPager.emptyUint32x2 ? 2 : 4;
+        this.shTextures[i].value = this.newUint32ArrayTexture(elementsPerSplat);
       }
     }
   }
   allocatePage() {
     return this.pageFreelist.shift();
-  }
-  freePage(page) {
-    this.pageFreelist.push(page);
   }
   getSplatsChunk(splats, chunk) {
     const chunks = this.splatsChunkToPage.get(splats);
@@ -11833,94 +11747,56 @@ const _SplatPager = class _SplatPager {
       (page) => !freedPages.has(page)
     );
   }
-  uploadPage(page, packedArray, extra, extArray) {
-    const pageBase = page * this.pageSplats;
-    const array = this.packedTexture.value.image.data;
-    array.subarray(pageBase * 4, pageBase * 4 + packedArray.length).set(packedArray);
-    this.packedTexture.value.addLayerUpdate(page);
-    this.packedTexture.value.needsUpdate = true;
+  uploadPage(page, packedArray, shArrays, extArray, labels, instances) {
+    const pageBase = page * PAGE_SPLATS;
+    uploadTextureLayer(this.packedTexture, page, pageBase * 4, packedArray);
     if (extArray) {
-      const array2 = this.extTexture.value.image.data;
-      array2.subarray(pageBase * 4, pageBase * 4 + extArray.length).set(extArray);
-      this.extTexture.value.addLayerUpdate(page);
-      this.extTexture.value.needsUpdate = true;
+      uploadTextureLayer(this.extTexture, page, pageBase * 4, extArray);
     }
-    const numSh = this.extSplats ? extra.sh3a && extra.sh3b ? 3 : extra.sh2 ? 2 : extra.sh1 ? 1 : 0 : extra.sh3 ? 3 : extra.sh2 ? 2 : extra.sh1 ? 1 : 0;
+    const numSh = Math.min(shArrays.length, 3);
     this.ensureShTextures(numSh);
-    if (extra.labels !== void 0) {
+    if (labels !== void 0) {
       this.ensureLabelTextures();
-      const labels = extra.labels;
-      const array2 = this.labelTexture.value.image.data;
-      array2.subarray(pageBase, pageBase + labels.length).set(labels);
+      const labels_arr = labels;
+      const array = this.labelTexture.value.image.data;
+      array.subarray(pageBase, pageBase + labels_arr.length).set(labels_arr);
       this.labelTexture.value.addLayerUpdate(page);
       this.labelTexture.value.needsUpdate = true;
     }
-    if (extra.instances !== void 0) {
+    if (instances !== void 0) {
       this.ensureInstanceTextures();
-      const instances = extra.instances;
-      const array2 = this.instanceTexture.value.image.data;
-      array2.subarray(pageBase, pageBase + instances.length).set(instances);
+      const instances_arr = instances;
+      const array = this.instanceTexture.value.image.data;
+      array.subarray(pageBase, pageBase + instances_arr.length).set(instances_arr);
       this.instanceTexture.value.addLayerUpdate(page);
       this.instanceTexture.value.needsUpdate = true;
     }
-    if (!this.extSplats) {
-      if (this.sh1Texture.value !== _SplatPager.emptySh1Texture && extra.sh1) {
-        const sh1 = extra.sh1;
-        const array2 = this.sh1Texture.value.image.data;
-        array2.subarray(pageBase * 2, pageBase * 2 + sh1.length).set(sh1);
-        this.sh1Texture.value.addLayerUpdate(page);
-        this.sh1Texture.value.needsUpdate = true;
-      }
-    } else {
-      if (this.sh1Texture.value !== _SplatPager.emptyExtSh1Texture && extra.sh1) {
-        const sh1 = extra.sh1;
-        const array2 = this.sh1Texture.value.image.data;
-        array2.subarray(pageBase * 4, pageBase * 4 + sh1.length).set(sh1);
-        this.sh1Texture.value.addLayerUpdate(page);
-        this.sh1Texture.value.needsUpdate = true;
-      }
-    }
-    if (this.sh2Texture.value !== _SplatPager.emptySh2Texture && extra.sh2) {
-      const sh2 = extra.sh2;
-      const array2 = this.sh2Texture.value.image.data;
-      array2.subarray(pageBase * 4, pageBase * 4 + sh2.length).set(sh2);
-      this.sh2Texture.value.addLayerUpdate(page);
-      this.sh2Texture.value.needsUpdate = true;
-    }
-    if (!this.extSplats) {
-      if (this.sh3Texture.value !== _SplatPager.emptySh3Texture && extra.sh3) {
-        const sh3 = extra.sh3;
-        const array2 = this.sh3Texture.value.image.data;
-        array2.subarray(pageBase * 4, pageBase * 4 + sh3.length).set(sh3);
-        this.sh3Texture.value.addLayerUpdate(page);
-        this.sh3Texture.value.needsUpdate = true;
-      }
-    } else {
-      if (this.sh3Texture.value !== _SplatPager.emptyExtSh3Texture && extra.sh3a) {
-        const sh3a = extra.sh3a;
-        const array2 = this.sh3Texture.value.image.data;
-        array2.subarray(pageBase * 4, pageBase * 4 + sh3a.length).set(sh3a);
-        this.sh3Texture.value.addLayerUpdate(page);
-        this.sh3Texture.value.needsUpdate = true;
-      }
-      if (this.sh3TextureB.value !== _SplatPager.emptyExtSh3BTexture && extra.sh3b) {
-        const sh3b = extra.sh3b;
-        const array2 = this.sh3TextureB.value.image.data;
-        array2.subarray(pageBase * 4, pageBase * 4 + sh3b.length).set(sh3b);
-        this.sh3TextureB.value.addLayerUpdate(page);
-        this.sh3TextureB.value.needsUpdate = true;
-      }
+    for (let i = 0; i < shArrays.length; i++) {
+      const array = shArrays[i];
+      const elementsPerSplat = this.shTextures[i].value.format === THREE.RGIntegerFormat ? 2 : 4;
+      uploadTextureLayer(
+        this.shTextures[i],
+        page,
+        pageBase * elementsPerSplat,
+        array
+      );
     }
   }
-  getGlTexture(texture2) {
-    return getGlTexture(this.renderer, texture2);
-  }
-  newUint32ArrayTexture(data, width, height, depth, format, type, internalFormat) {
-    const texture2 = new THREE.DataArrayTexture(data, width, height, depth);
-    texture2.format = format;
-    texture2.type = type;
-    texture2.internalFormat = internalFormat;
+  newUint32ArrayTexture(elementsPerSplat) {
+    const data = new Uint32Array(
+      this.maxPages * PAGE_WIDTH * PAGE_HEIGHT * elementsPerSplat
+    );
+    const texture2 = new THREE.DataArrayTexture(
+      data,
+      PAGE_WIDTH,
+      PAGE_HEIGHT,
+      this.maxPages
+    );
+    texture2.format = elementsPerSplat === 2 ? THREE.RGIntegerFormat : THREE.RGBAIntegerFormat;
+    texture2.type = THREE.UnsignedIntType;
+    texture2.internalFormat = elementsPerSplat === 2 ? "RG32UI" : "RGBA32UI";
     texture2.needsUpdate = true;
+    texture2.source.dataReady = false;
     this.renderer.initTexture(texture2);
     return texture2;
   }
@@ -12007,7 +11883,7 @@ const _SplatPager = class _SplatPager {
       splats,
       page,
       chunk,
-      numSplats: this.pageSplats
+      numSplats: PAGE_SPLATS
     });
     return page;
   }
@@ -12035,14 +11911,40 @@ const _SplatPager = class _SplatPager {
         numSplats,
         lodTree: extra.lodTree
       });
-      if (!this.extSplats) {
-        const packedArray = data.packedArray;
-        this.newUploads.push({ page, numSplats, packedArray, extra });
-      } else {
+      if (isExtResult(data, this.extSplats)) {
         const extArrays = data.extArrays;
         const packedArray = extArrays[0];
         const extArray = extArrays[1];
-        this.newUploads.push({ page, numSplats, packedArray, extArray, extra });
+        const shArrays = [
+          data.extra.sh1,
+          data.extra.sh2,
+          data.extra.sh3a,
+          data.extra.sh3b
+        ];
+        shArrays.length = shArrays.findIndex((sh) => !sh);
+        this.newUploads.push({
+          page,
+          numSplats,
+          packedArray,
+          extArray,
+          shArrays,
+          labels: extra == null ? void 0 : extra.labels,
+          instances: extra == null ? void 0 : extra.instances
+        });
+      } else {
+        const packedArray = data.packedArray;
+        const shArrays = [
+          data.extra.sh1,
+          data.extra.sh2,
+          data.extra.sh3
+        ];
+        shArrays.length = shArrays.findIndex((sh) => !sh);
+        this.newUploads.push({
+          page,
+          numSplats,
+          packedArray,
+          shArrays
+        });
       }
     }
   }
@@ -12052,8 +11954,8 @@ const _SplatPager = class _SplatPager {
       if (!upload) {
         break;
       }
-      const { page, numSplats, packedArray, extArray, extra } = upload;
-      this.uploadPage(page, packedArray, extra, extArray);
+      const { page, numSplats, packedArray, extArray, shArrays, labels, instances } = upload;
+      this.uploadPage(page, packedArray, shArrays, extArray, labels, instances);
     }
   }
   consumeLodTreeUpdates() {
@@ -12106,24 +12008,29 @@ _SplatPager.emptyIndicesTexture = (() => {
 _SplatPager.emptyPackedTexture = _SplatPager.emptyUint32x4;
 _SplatPager.emptyExtTexture = _SplatPager.emptyUint32x4;
 _SplatPager.emptyLabelTexture = _SplatPager.emptyUint32x4;
-_SplatPager.emptySh1Texture = _SplatPager.emptyUint32x2;
-_SplatPager.emptySh2Texture = _SplatPager.emptyUint32x4;
-_SplatPager.emptySh3Texture = _SplatPager.emptyUint32x4;
-_SplatPager.emptyExtSh1Texture = _SplatPager.emptyUint32x4;
-_SplatPager.emptyExtSh2Texture = _SplatPager.emptyUint32x4;
-_SplatPager.emptyExtSh3Texture = _SplatPager.emptyUint32x4;
-_SplatPager.emptyExtSh3BTexture = _SplatPager.emptyUint32x4;
+_SplatPager.emptyShTextures = [
+  _SplatPager.emptyUint32x2,
+  _SplatPager.emptyUint32x4,
+  _SplatPager.emptyUint32x4
+];
+_SplatPager.emptyExtShTextures = [
+  _SplatPager.emptyUint32x4,
+  _SplatPager.emptyUint32x4,
+  _SplatPager.emptyUint32x4,
+  // SH3A
+  _SplatPager.emptyUint32x4
+  // SH3B
+];
 let SplatPager = _SplatPager;
-function getGlTexture(renderer, texture2) {
-  if (!renderer.properties.has(texture2)) {
-    throw new Error("texture not found");
-  }
-  const props = renderer.properties.get(texture2);
-  const glTexture = props.__webglTexture;
-  if (!glTexture) {
-    throw new Error("texture not found");
-  }
-  return glTexture;
+function isExtResult(data, extSplats) {
+  return extSplats;
+}
+function uploadTextureLayer(texture2, layer, dstOffset, data) {
+  const array = texture2.value.image.data;
+  array.subarray(dstOffset, dstOffset + data.length).set(data);
+  texture2.value.addLayerUpdate(layer);
+  texture2.value.needsUpdate = true;
+  texture2.value.source.dataReady = true;
 }
 async function fetchRange({
   url,
@@ -14044,32 +13951,16 @@ const _SparkRenderer = class _SparkRenderer extends THREE.Mesh {
       this.orderingTexture = orderingTexture;
     } else {
       const renderer = this.renderer;
-      const gl = renderer.getContext();
       if (!renderer.properties.has(this.orderingTexture)) {
         this.orderingTexture.needsUpdate = true;
       } else {
-        const props = renderer.properties.get(this.orderingTexture);
-        const glTexture = props.__webglTexture;
-        if (!glTexture) {
-          throw new Error("ordering texture not found");
-        }
-        renderer.state.activeTexture(gl.TEXTURE0);
-        renderer.state.bindTexture(gl.TEXTURE_2D, glTexture);
-        gl.bindBuffer(gl.PIXEL_UNPACK_BUFFER, null);
-        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-        gl.texSubImage2D(
-          gl.TEXTURE_2D,
-          0,
-          0,
-          0,
+        uploadU32DataTextureRows(
+          renderer,
+          this.orderingTexture,
           4096,
           rows,
-          gl.RGBA_INTEGER,
-          gl.UNSIGNED_INT,
-          // data,
           result.ordering
         );
-        renderer.state.bindTexture(gl.TEXTURE_2D, null);
       }
     }
     if (this.current.mappingVersion === current.mappingVersion) {
