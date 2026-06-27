@@ -1870,14 +1870,14 @@ impl<T: SplatReceiver> RadDecoder<T> {
                 },
                 RadChunkPropertyName::Label => {
                     let values = match prop.encoding {
-                        RadChunkPropertyEncoding::U16 => decode_u16_as_u32(data, 1, self.count),
+                        RadChunkPropertyEncoding::U32 => decode_u32(data, 1, self.count),
                         _ => return Err(anyhow::anyhow!("Unsupported label encoding: {:?}", prop.encoding)),
                     };
                     self.splats.set_label(self.base, self.count, &values);
                 },
                 RadChunkPropertyName::InstanceLabel => {
                     let values = match prop.encoding {
-                        RadChunkPropertyEncoding::U16 => decode_u16_as_u32(data, 1, self.count),
+                        RadChunkPropertyEncoding::U32 => decode_u32(data, 1, self.count),
                         _ => return Err(anyhow::anyhow!("Unsupported instance encoding: {:?}", prop.encoding)),
                     };
                     self.splats.set_instance_label(self.base, self.count, &values);
