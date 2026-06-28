@@ -3,6 +3,7 @@ members = [
     "build-lod",
     "spark-rs",
     "spark-lib",
+    "py-build-lod"
 ]
 resolver = "2"
 
