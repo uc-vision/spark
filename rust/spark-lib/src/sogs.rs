@@ -46,7 +46,6 @@ struct PcSogsV1 {
 
 #[derive(Debug, Deserialize)]
 struct Labels {
-    info: std::collections::HashMap<String, f64>,
     files: [String; 1],
 }
 
